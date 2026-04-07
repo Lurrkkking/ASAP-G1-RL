@@ -11,7 +11,7 @@ from humanoidverse.utils.torch_utils import quat_rotate_inverse
 from collections import deque
 
 URDF_PATH = "/root/autodl-tmp/ASAP/humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.urdf"
-ONNX_PATH = "/root/autodl-tmp/ASAP/logs/TEST/20260406_220219-TEST_Locomotion_resume_from_2300/exported/model_3700.onnx"
+ONNX_PATH = "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260407_155156-MotionTracking_CR7_V2_Fixed-motion_tracking-g1_29dof_anneal_23dof/exported/model_2000.onnx"
 
 # From humanoidverse/config/robot/g1/g1_29dof_anneal_23dof.yaml
 ACTION_SCALE = 0.25
@@ -282,15 +282,20 @@ def main() -> None:
     # ========================================================
     # 🏔️ 复杂地形：适配 Genesis 0.4.5 API
     # 1. 生成 201x201 的随机噪声图
-    h_field = 0.02 * np.random.randn(201, 201).astype(np.float32)
+    #h_field = 0.02 * np.random.randn(201, 201).astype(np.float32)
+
+    #plane = scene.add_entity(
+    #    gs.morphs.Terrain(
+    #        height_field=h_field,
+    #        horizontal_scale=0.1,  # 采样间隔 0.1米，201个点正好覆盖 20m x 20m
+    #        vertical_scale=1.0,    # 垂直比例设为 1.0，表示 h_field 里的数值单位直接就是“米”
+    #        pos=(-10, -10, 0),         # 地形中心点位置
+    #   ),
+    #    material=gs.materials.Rigid(friction=0.7) 
+    #)
 
     plane = scene.add_entity(
-        gs.morphs.Terrain(
-            height_field=h_field,
-            horizontal_scale=0.1,  # 采样间隔 0.1米，201个点正好覆盖 20m x 20m
-            vertical_scale=1.0,    # 垂直比例设为 1.0，表示 h_field 里的数值单位直接就是“米”
-            pos=(-10, -10, 0),         # 地形中心点位置
-        ),
+        gs.morphs.Plane(),
         material=gs.materials.Rigid(friction=0.7) 
     )
     # ========================================================
