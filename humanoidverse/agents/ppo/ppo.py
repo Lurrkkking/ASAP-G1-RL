@@ -71,6 +71,7 @@ class PPO(BaseAlgo):
         self.load_optimizer = self.config.load_optimizer
         self.num_learning_iterations = self.config.num_learning_iterations
         self.init_at_random_ep_len = self.config.init_at_random_ep_len
+        self.eval_steps = int(self.config.get("eval_steps", -1))
 
         # Algorithm related Config
 
@@ -151,17 +152,32 @@ class PPO(BaseAlgo):
                 logger.info(f"Optimizer loaded from checkpoint")
                 logger.info(f"Actor Learning rate: {self.actor_learning_rate}")
                 logger.info(f"Critic Learning rate: {self.critic_learning_rate}")
-            self.current_learning_iteration = loaded_dict["iter"]
+            loaded_iter = loaded_dict.get("iter", 0)
+            # Backward compatibility: older checkpoints saved the wrong iter (often 0).
+            # Recover iteration from filename like model_9500.pt when possible.
+            if loaded_iter == 0:
+                ckpt_name = os.path.basename(str(ckpt_path))
+                if ckpt_name.startswith("model_") and ckpt_name.endswith(".pt"):
+                    try:
+                        loaded_iter = int(ckpt_name[len("model_"):-len(".pt")])
+                        if loaded_iter > 0:
+                            logger.warning(
+                                f"Checkpoint iter was 0; recovered iter={loaded_iter} from filename {ckpt_name}"
+                            )
+                    except ValueError:
+                        pass
+            self.current_learning_iteration = int(loaded_iter)
             return loaded_dict["infos"]
 
-    def save(self, path, infos=None):
+    def save(self, path, infos=None, iter_num=None):
         logger.info(f"Saving checkpoint to {path}")
+        iter_to_save = self.current_learning_iteration if iter_num is None else int(iter_num)
         torch.save({
             'actor_model_state_dict': self.actor.state_dict(),
             'critic_model_state_dict': self.critic.state_dict(),
             'actor_optimizer_state_dict': self.actor_optimizer.state_dict(),
             'critic_optimizer_state_dict': self.critic_optimizer.state_dict(),
-            'iter': self.current_learning_iteration,
+            'iter': iter_to_save,
             'infos': infos,
         }, path)
         
@@ -206,11 +222,14 @@ class PPO(BaseAlgo):
             }
             self._post_epoch_logging(log_dict)
             if it % self.save_interval == 0:
-                self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)), iter_num=it)
             self.ep_infos.clear()
         
         self.current_learning_iteration += num_learning_iterations
-        self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)))
+        self.save(
+            os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)),
+            iter_num=self.current_learning_iteration,
+        )
 
     def _actor_rollout_step(self, obs_dict, policy_state_dict):
         actions = self._actor_act_step(obs_dict)
@@ -584,19 +603,43 @@ class PPO(BaseAlgo):
         self._create_eval_callbacks()
         self._pre_evaluate_policy()
         actor_state = self._create_actor_state()
-        step = 0
         self.eval_policy = self._get_inference_policy()
         obs_dict = self.env.reset_all()
         init_actions = torch.zeros(self.env.num_envs, self.num_act, device=self.device)
         actor_state.update({"obs": obs_dict, "actions": init_actions})
         actor_state = self._pre_eval_env_step(actor_state)
-        while True:
-            actor_state["step"] = step
-            actor_state = self._pre_eval_env_step(actor_state)
-            actor_state = self.env_step(actor_state)
-            actor_state = self._post_eval_env_step(actor_state)
-            step += 1
+
+        eval_steps = int(self.eval_steps)
+        if eval_steps <= 0:
+            fallback_steps = int(getattr(self.env.config, "auto_record_num_frames", -1))
+            if fallback_steps > 0:
+                eval_steps = fallback_steps
+                logger.info(f"eval_steps not set; fallback to auto_record_num_frames={eval_steps}")
+
+        if eval_steps > 0:
+            log_interval = max(1, eval_steps // 20)
+            for step in track(range(eval_steps), description="Evaluating policy"):
+                actor_state["step"] = step
+                actor_state = self._pre_eval_env_step(actor_state)
+                actor_state = self.env_step(actor_state)
+                actor_state = self._post_eval_env_step(actor_state)
+                if step == 0 or (step + 1) % log_interval == 0 or (step + 1) == eval_steps:
+                    logger.info(f"Eval progress: {step + 1}/{eval_steps}")
+        else:
+            logger.info("Evaluating policy without step limit; set algo.config.eval_steps to show progress.")
+            step = 0
+            while True:
+                actor_state["step"] = step
+                actor_state = self._pre_eval_env_step(actor_state)
+                actor_state = self.env_step(actor_state)
+                actor_state = self._post_eval_env_step(actor_state)
+                step += 1
+                if step % 100 == 0:
+                    logger.info(f"Eval progress: {step} steps")
+
         self._post_evaluate_policy()
+        if hasattr(self.env, "simulator") and hasattr(self.env.simulator, "finalize_recording"):
+            self.env.simulator.finalize_recording()
 
     def _create_actor_state(self):
         return {"done_indices": [], "stop": False}
@@ -608,7 +651,27 @@ class PPO(BaseAlgo):
 
     def _pre_evaluate_policy(self, reset_env=True):
         self._eval_mode()
-        self.env.set_is_evaluating()
+
+        eval_command = None
+        if hasattr(self.env, "config"):
+            try:
+                eval_command = self.env.config.get("eval_command", None)
+            except Exception:
+                eval_command = None
+
+        if eval_command is not None:
+            try:
+                eval_command = list(eval_command)
+            except TypeError:
+                logger.warning(f"Invalid eval_command={eval_command}, fallback to default eval mode")
+                eval_command = None
+
+        if eval_command is not None:
+            logger.info(f"Setting evaluation command to {eval_command}")
+            self.env.set_is_evaluating(command=eval_command)
+        else:
+            self.env.set_is_evaluating()
+
         if reset_env:
             _ = self.env.reset_all()
 

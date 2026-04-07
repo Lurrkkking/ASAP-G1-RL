@@ -8,79 +8,82 @@ rewards:
   set_reward_date: 20241025
   only_positive_rewards: False
   reward_scales:
-      teleop_body_position_extend: 1.0
-      teleop_vr_3point: 1.6
-      teleop_body_position_feet: 2.1
-      teleop_body_rotation_extend: 0.5
-      teleop_body_ang_velocity_extend: 0.5
-      teleop_body_velocity_extend: 0.5
-      teleop_joint_position: 0.75
-      teleop_joint_velocity: 0.5
-      penalty_torques: -0.000001
-      # penalty_dof_vel: -0.0001
-      # penalty_dof_acc: -2.5e-8
-      penalty_action_rate: -0.5 # need to be tuned up to -0.5 for real robot
-      # penalty_feet_contact_forces: -0.01
-      # penalty_stumble: -10.0
+      teleop_body_position_extend: 1.0      # 躯干（骨盆/重心）绝对空间位置的追踪权重
+      teleop_vr_3point: 3.6                 # VR三点追踪（头显+双手的控制器）。权重较高，保证上肢动作（如C罗挥手）的视觉相似度
+      teleop_body_position_feet: 2.1        # 双脚空间位置追踪。权重最高！双足机器人的落足点直接决定了系统能否保持动态平衡
+      teleop_body_rotation_extend: 0.5      # 躯干空间旋转（横滚、俯仰、偏航）的追踪权重
+      teleop_body_ang_velocity_extend: 0.5  # 躯干角速度的追踪权重
+      teleop_body_velocity_extend: 0.5      # 躯干线速度的追踪权重
+      teleop_joint_position: 0.75           # 全身 23 个底层关节角度的追踪权重。允许一定误差，给机器人留出自我找平衡的冗余空间
+      teleop_joint_velocity: 0.5            # 关节角速度的追踪权重，保证动作节奏一致
+      penalty_torques: -0.000001            # 力矩惩罚。强迫机器人“省力”，避免电机长时间满载发热
+      # penalty_dof_vel: -0.0001            # 关节速度惩罚。防止关节转得太快
+      # penalty_dof_acc: -2.5e-8            # 关节加速度惩罚。防止电机输出瞬间尖峰
+
+      # 【极其重要】动作输出速率惩罚。惩罚相邻两次 PD 控制目标值的差值。
+      # 设得越负，动作越平滑。官方提示：如果要上真机，必须调低到 -0.5，否则打齿或烧减速器
+      penalty_action_rate: -1.5             # need to be tuned up to -0.5 for real robot
+      # penalty_feet_contact_forces: -0.01  # 足端接触力惩罚。防止重落地
+      # penalty_stumble: -10.0              # 绊倒惩罚。在平地模仿中通常不需要，因为平地不会绊脚
       
       # better for landing
-      penalty_feet_ori: -2.0
-      feet_heading_alignment: -0.1
-      penalty_slippage: -1.0
+      penalty_feet_ori: -2.0                # 落地脚掌姿态惩罚。强迫脚底板落地时平行于地面，避免脚尖/脚跟先着地导致崴脚
+      feet_heading_alignment: -0.1          # 脚部航向对齐惩罚。保证脚尖朝向与运动方向一致  
+      penalty_slippage: -1.0                # 打滑惩罚。足端接触地面时，如果有水平方向的速度则扣分
 
-      limits_dof_pos: -10.0
-      limits_dof_vel: -5.0
-      limits_torque: -5.0
-      termination: -200.0
-      # feet_max_height_for_this_air: -100.0
+      limits_dof_pos: -10.0                 # 逼近关节物理限位时的惩罚
+      limits_dof_vel: -5.0                  # 逼近电机最大转速时的惩罚
+      limits_torque: -5.0                   # 逼近电机最大扭矩时的惩罚
+      termination: -200.0                   # 终止惩罚！一旦发生非脚部的碰撞（比如躯干砸地、摔倒），直接扣除200分并重置环境
+      # feet_max_height_for_this_air: -100.0  # 抬腿惩罚
       
 
-  teleop_body_pos_lowerbody_weight : 0.5
-  teleop_body_pos_upperbody_weight : 1.0
+  teleop_body_pos_lowerbody_weight : 0.5    # 下半身位置权重低（给逆运动学留足空间找平衡）
+  teleop_body_pos_upperbody_weight : 1.0    # 上半身位置权重高（保证视觉上像人）
 
-  desired_feet_max_height_for_this_air: 0.2
+  desired_feet_max_height_for_this_air: 0.2 # 期望的腾空最大高度（米）
 
   reward_tracking_sigma:
-    teleop_upper_body_pos: 0.03
-    teleop_lower_body_pos: 0.1
-    teleop_vr_3point_pos: 0.03
-    teleop_feet_pos: 0.03
+    teleop_upper_body_pos: 0.03             # 上半身位置误差容忍度：极低（要求高保真）
+    teleop_lower_body_pos: 0.1              # 下半身位置误差容忍度：较高（允许机器人腿部姿态和人有一点不同）
+    teleop_vr_3point_pos: 0.03              # 头/手位置误差容忍度：极低
+    teleop_feet_pos: 0.03                   # 脚部位置误差容忍度：极低（落点必须精准）
 
-    teleop_body_rot: 1.0
-    teleop_body_vel: 1.0
-    teleop_body_ang_vel: 1.0
-    teleop_joint_pos: 1.0
-    teleop_joint_vel: 1.0
+    teleop_body_rot: 1.0                    # 旋转角度容忍度：较宽容
+    teleop_body_vel: 1.0                    # 线速度容忍度
+    teleop_body_ang_vel: 1.0                # 角速度容忍度
+    teleop_joint_pos: 1.0                   # 底层关节角度容忍度
+    teleop_joint_vel: 1.0                   # 底层关节速度容忍度
 
 
 
   # locomotion_max_contact_force: 200.0
   # desired_feet_max_height_for_this_air: 0.2
 
-  reward_penalty_curriculum: False
-  reward_initial_penalty_scale : 0.10
-  reward_min_penalty_scale: 0.0
-  reward_max_penalty_scale: 1.0
-  reward_penalty_level_down_threshold: 40
+  reward_penalty_curriculum: False          # 当前是否开启惩罚课程学习？（这里写了 False，如果起跳太难，可以改为 True 试试）
+  reward_initial_penalty_scale : 0.10       # 初始惩罚比例：10%（放水模式，允许它狂野试错）
+  reward_min_penalty_scale: 0.0             # 惩罚比例下限
+  reward_max_penalty_scale: 1.0             # 惩罚比例上限：100%（满额惩罚）
+  reward_penalty_level_down_threshold: 40   # 如果平均存活帧数低于 40，说明太难了，惩罚比例退级
   reward_penalty_level_up_threshold: 42 # shortest motion in TairanTestbed is 92, therefore 46 is the middle point, we set 42 here for curriculum learning level up
   reward_penalty_degree: 0.000003 # 0.00001
-  num_compute_average_epl: 10000
+  num_compute_average_epl: 10000            # 计算平均存活帧数（EPL）所依据的最近步数样本量
 
   reward_limit:
-    soft_dof_pos_limit: 0.9
-    soft_dof_vel_limit: 0.9
-    soft_torque_limit: 0.825
+    soft_dof_pos_limit: 0.9                 # 软位置限位：只允许使用关节物理行程的 90%
+    soft_dof_vel_limit: 0.9                 # 软速度限位：只允许跑到电机最大转速的 90%
+    soft_torque_limit: 0.825                # 软力矩限位：只允许输出额定最大力矩的 82.5%（留下余量保护硬件）
 
     reward_limits_curriculum:
-      soft_dof_pos_curriculum: True
-      soft_dof_pos_initial_limit: 1.15
-      soft_dof_pos_max_limit: 1.15
-      soft_dof_pos_min_limit: 0.95
-      soft_dof_pos_curriculum_degree: 0.00000025
+      soft_dof_pos_curriculum: True         # 开启位置软限位课程学习
+      soft_dof_pos_initial_limit: 1.15      # 初期允许超限到 115%（放任狂野）
+      soft_dof_pos_max_limit: 1.15          # 最大上限
+      soft_dof_pos_min_limit: 0.95          # 最终收紧到 95%
+      soft_dof_pos_curriculum_degree: 0.00000025    # 收紧步长
       soft_dof_pos_curriculum_level_down_threshold: 40
       soft_dof_pos_curriculum_level_up_threshold: 42
 
-      soft_dof_vel_curriculum: True
+      soft_dof_vel_curriculum: False        # 开启速度软限位课程学习
       soft_dof_vel_initial_limit: 1.15
       soft_dof_vel_max_limit: 1.25
       soft_dof_vel_min_limit: 0.95
@@ -88,14 +91,15 @@ rewards:
       soft_dof_vel_curriculum_level_down_threshold: 40
       soft_dof_vel_curriculum_level_up_threshold: 42
 
-      soft_torque_curriculum: True
-      soft_torque_initial_limit: 1.15
+      soft_torque_curriculum: False           # 开启力矩软限位课程学习
+      soft_torque_initial_limit: 1.15        # 起跳初期允许电机超频 15% 输出力矩
       soft_torque_max_limit: 1.25
-      soft_torque_min_limit: 0.85
+      soft_torque_min_limit: 0.85            # 最终收紧到 85%
       soft_torque_curriculum_degree: 0.00000025
       soft_torque_curriculum_level_down_threshold: 40
       soft_torque_curriculum_level_up_threshold: 42
 
+# 声明哪些奖励项属于“惩罚项”，受上方 Curriculum 缩放比例的控制
   reward_penalty_reward_names : [
     "penalty_torques",
     "penalty_dof_acc",

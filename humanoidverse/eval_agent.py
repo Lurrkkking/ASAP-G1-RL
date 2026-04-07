@@ -6,7 +6,7 @@ import hydra
 from hydra.utils import instantiate
 from hydra.core.hydra_config import HydraConfig
 from hydra.core.config_store import ConfigStore
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
 from humanoidverse.utils.logging import HydraLoggerBridge
 import logging
 from utils.config_utils import *  # noqa: E402, F403
@@ -17,7 +17,10 @@ from humanoidverse.utils.config_utils import *  # noqa: E402, F403
 from loguru import logger
 
 import threading
-# from pynput import keyboard
+try:
+    from pynput import keyboard
+except Exception:
+    keyboard = None
 
 def on_press(key, env):
     try:
@@ -43,6 +46,9 @@ def on_press(key, env):
         pass
 
 def listen_for_keypress(env):
+    if keyboard is None:
+        logger.warning("pynput keyboard listener unavailable; skipping key listener.")
+        return
     with keyboard.Listener(on_press=lambda key: on_press(key, env)) as listener:
         listener.join()
 
@@ -102,7 +108,34 @@ def main(override_config: OmegaConf):
             config = OmegaConf.merge(config, eval_overrides)
         else:
             config = override_config
-            
+
+    auto_record = bool(config.get("auto_record", False))
+    auto_record_num_frames = int(config.get("auto_record_num_frames", 600))
+    disable_keyboard_listener = bool(config.get("disable_keyboard_listener", True))
+    offscreen_record = bool(config.get("offscreen_record", False))
+    offscreen_record_width = int(config.get("offscreen_record_width", 1600))
+    offscreen_record_height = int(config.get("offscreen_record_height", 900))
+    offscreen_record_fps = int(config.get("offscreen_record_fps", 50))
+
+    if offscreen_record and config.headless:
+        logger.warning("offscreen_record needs a graphics context; overriding headless=False (use xvfb on headless servers)")
+        config.headless = False
+    elif auto_record and config.headless and not offscreen_record:
+        logger.warning("auto_record requires viewer rendering; overriding headless=False")
+        config.headless = False
+
+    OmegaConf.update(config, "env.config.headless", config.headless, force_add=True)
+    OmegaConf.update(config, "env.config.auto_record", auto_record, force_add=True)
+    OmegaConf.update(config, "env.config.auto_record_num_frames", auto_record_num_frames, force_add=True)
+    OmegaConf.update(config, "env.config.offscreen_record", offscreen_record, force_add=True)
+    OmegaConf.update(config, "env.config.offscreen_record_width", offscreen_record_width, force_add=True)
+    OmegaConf.update(config, "env.config.offscreen_record_height", offscreen_record_height, force_add=True)
+    OmegaConf.update(config, "env.config.offscreen_record_fps", offscreen_record_fps, force_add=True)
+    if auto_record:
+        current_eval_steps = config.algo.config.get("eval_steps", -1)
+        if current_eval_steps is None or int(current_eval_steps) < 0:
+            OmegaConf.update(config, "algo.config.eval_steps", auto_record_num_frames, force_add=True)
+
     simulator_type = config.simulator['_target_'].split('.')[-1]
     if simulator_type == 'IsaacSim':
         from omni.isaac.lab.app import AppLauncher
@@ -147,12 +180,21 @@ def main(override_config: OmegaConf):
     ckpt_num = config.checkpoint.split('/')[-1].split('_')[-1].split('.')[0]
     config.env.config.save_rendering_dir = str(checkpoint.parent / "renderings" / f"ckpt_{ckpt_num}")
     config.env.config.ckpt_dir = str(checkpoint.parent) # commented out for now, might need it back to save motion
+
+    with open_dict(config.env.config):
+        config.env.config.auto_record = auto_record
+        config.env.config.auto_record_num_frames = auto_record_num_frames
+        config.env.config.offscreen_record = offscreen_record
+        config.env.config.offscreen_record_width = offscreen_record_width
+        config.env.config.offscreen_record_height = offscreen_record_height
+        config.env.config.offscreen_record_fps = offscreen_record_fps
+
     env = instantiate(config.env, device=device)
 
-    # Start a thread to listen for key press
-    key_listener_thread = threading.Thread(target=listen_for_keypress, args=(env,))
-    key_listener_thread.daemon = True
-    key_listener_thread.start()
+    if not disable_keyboard_listener:
+        key_listener_thread = threading.Thread(target=listen_for_keypress, args=(env,))
+        key_listener_thread.daemon = True
+        key_listener_thread.start()
 
     algo: BaseAlgo = instantiate(config.algo, env=env, device=device, log_dir=None)
     algo.setup()

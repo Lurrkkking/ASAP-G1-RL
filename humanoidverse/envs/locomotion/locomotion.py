@@ -196,8 +196,12 @@ class LeggedRobotLocomotion(LeggedRobotBase):
 
     def _reward_penalty_stumble(self):
         # Penalize feet hitting vertical surfaces
-        return torch.any(torch.norm(self.simulator.contact_forces[:, self.feet_indices, :2], dim=2) >\
-             5 *torch.abs(self.simulator.contact_forces[:, self.feet_indices, 2]), dim=1)
+        ratio_threshold = self.config.rewards.get("stumble_force_ratio_threshold", 5.0)
+        return torch.any(
+            torch.norm(self.simulator.contact_forces[:, self.feet_indices, :2], dim=2)
+            > ratio_threshold * torch.abs(self.simulator.contact_forces[:, self.feet_indices, 2]),
+            dim=1,
+        )
 
 
 

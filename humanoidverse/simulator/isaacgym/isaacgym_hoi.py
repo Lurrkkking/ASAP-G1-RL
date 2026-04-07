@@ -21,6 +21,8 @@ class IsaacGym(BaseSimulator):
         self.simulator_config = config.simulator.config
         self.robot_config = config.robot
         self.visualize_viewer = False
+        self.auto_record = bool(config.get("auto_record", False))
+        self.auto_record_num_frames = int(config.get("auto_record_num_frames", -1))
         if config.save_rendering_dir is not None:
             self.save_rendering_dir = Path(config.save_rendering_dir)
 
@@ -666,6 +668,10 @@ class IsaacGym(BaseSimulator):
         self.save_rendering_dir.mkdir(parents=True, exist_ok=True)
         self.user_recording_video_path = str(self.save_rendering_dir / f"{self.config.experiment_name}-%s")
 
+        if self.auto_record:
+            self.user_is_recording = True
+            self.user_recording_state_change = True
+
     def render(self, sync_frame_time=True):
         # check for window closed
         if self.gym.query_viewer_has_closed(self.viewer):
@@ -816,6 +822,10 @@ class IsaacGym(BaseSimulator):
                     + "/%04d.png" % self.user_recording_frame,
                 )
                 self.user_recording_frame += 1
+
+                if self.auto_record_num_frames > 0 and self.user_recording_frame >= self.auto_record_num_frames:
+                    self.user_is_recording = False
+                    self.user_recording_state_change = True
 
             if delete_user_viewer_recordings:
                 images = [

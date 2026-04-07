@@ -21,6 +21,17 @@ class IsaacGym(BaseSimulator):
         self.simulator_config = config.simulator.config
         self.robot_config = config.robot
         self.visualize_viewer = False
+        self.auto_record = bool(config.get("auto_record", False))
+        self.auto_record_num_frames = int(config.get("auto_record_num_frames", -1))
+        self.offscreen_record = bool(config.get("offscreen_record", False))
+        self.offscreen_record_width = int(config.get("offscreen_record_width", 1600))
+        self.offscreen_record_height = int(config.get("offscreen_record_height", 900))
+        self.offscreen_record_fps = int(config.get("offscreen_record_fps", 50))
+        self.offscreen_camera_handle = None
+        self.offscreen_video_writer = None
+        self.offscreen_video_path = None
+        self.offscreen_recorded_frames = 0
+        self.offscreen_recording_active = False
         if config.save_rendering_dir is not None:
             self.save_rendering_dir = Path(config.save_rendering_dir)
 
@@ -81,6 +92,8 @@ class IsaacGym(BaseSimulator):
         #     self.config.robot.contact_pairs_multiplier * 1024 * 1024
         # )
         sim_params.use_gpu_pipeline = True
+        if self.offscreen_record and hasattr(sim_params, "enable_camera_sensors"):
+            sim_params.enable_camera_sensors = True
 
         gymutil.parse_sim_config(self.simulator_config.sim, sim_params)
         return sim_params
@@ -454,6 +467,9 @@ class IsaacGym(BaseSimulator):
         self.dof_vel = self.dof_state.view(self.num_envs, -1, 2)[..., 1]
         self.contact_forces = gymtorch.wrap_tensor(net_contact_forces).view(self.num_envs, -1, 3) # shape: num_envs, num_bodies, xyz axis
 
+        if self.offscreen_record:
+            self._setup_offscreen_recording()
+
     def refresh_sim_tensors(self):
         self.gym.refresh_dof_state_tensor(self.sim)
         self.gym.refresh_actor_root_state_tensor(self.sim)
@@ -502,6 +518,103 @@ class IsaacGym(BaseSimulator):
         if self.sim_device == 'cpu':
             self.gym.fetch_results(self.sim, True)
         self.gym.refresh_dof_state_tensor(self.sim)
+
+    def _setup_offscreen_recording(self):
+        if not hasattr(self, "save_rendering_dir"):
+            logger.warning("save_rendering_dir is not set; skip offscreen recording setup")
+            return
+
+        self.save_rendering_dir.mkdir(parents=True, exist_ok=True)
+        curr_date_time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        base_name = f"{self.config.experiment_name}-{curr_date_time}"
+        self.offscreen_video_path = str(self.save_rendering_dir / f"{base_name}.mp4")
+
+        cam_props = gymapi.CameraProperties()
+        cam_props.width = self.offscreen_record_width
+        cam_props.height = self.offscreen_record_height
+        self.offscreen_camera_handle = self.gym.create_camera_sensor(self.envs[0], cam_props)
+
+        cam_pos = gymapi.Vec3(0.0, 7.07, 3.0)   # 原来是 (5.0, 5.0, 3.0)
+        cam_target = gymapi.Vec3(0.0, 0.0, 3.0)
+        self.gym.set_camera_location(self.offscreen_camera_handle, self.envs[0], cam_pos, cam_target)
+
+        fourcc = cv2.VideoWriter_fourcc(*"MP4V")
+        self.offscreen_video_writer = cv2.VideoWriter(
+            self.offscreen_video_path,
+            fourcc,
+            self.offscreen_record_fps,
+            (self.offscreen_record_width, self.offscreen_record_height),
+        )
+
+        if not self.offscreen_video_writer.isOpened():
+            logger.error(f"Failed to open offscreen video writer: {self.offscreen_video_path}")
+            self.offscreen_video_writer = None
+            return
+
+        self.offscreen_recorded_frames = 0
+        self.offscreen_recording_active = self.auto_record
+        if self.offscreen_recording_active:
+            logger.info(f"Started offscreen recording to {self.offscreen_video_path}")
+
+    def _write_offscreen_frame(self):
+        if not self.offscreen_recording_active:
+            return
+        if self.offscreen_camera_handle is None or self.offscreen_video_writer is None:
+            return
+
+        self.gym.step_graphics(self.sim)
+        self.gym.render_all_camera_sensors(self.sim)
+
+        color = self.gym.get_camera_image(
+            self.sim,
+            self.envs[0],
+            self.offscreen_camera_handle,
+            gymapi.IMAGE_COLOR,
+        )
+        if color is None:
+            return
+
+        img = np.asarray(color)
+        if img.size == 0:
+            return
+
+        # IsaacGym may return IMAGE_COLOR as RGBA bytes or packed int32.
+        if img.ndim == 1:
+            img = img.reshape(self.offscreen_record_height, self.offscreen_record_width, 4)
+        elif img.ndim == 2 and img.shape[1] == self.offscreen_record_width * 4:
+            img = img.reshape(self.offscreen_record_height, self.offscreen_record_width, 4)
+        elif img.ndim == 2 and img.shape[1] == self.offscreen_record_width:
+            packed = img.astype(np.uint32)
+            rgba = np.empty((self.offscreen_record_height, self.offscreen_record_width, 4), dtype=np.uint8)
+            rgba[..., 0] = (packed >> 16) & 0xFF  # R
+            rgba[..., 1] = (packed >> 8) & 0xFF   # G
+            rgba[..., 2] = packed & 0xFF          # B
+            rgba[..., 3] = 255
+            img = rgba
+        elif img.ndim == 3 and img.shape[-1] == 4:
+            pass
+        else:
+            logger.warning(f"Unexpected offscreen frame shape: {img.shape}, dtype={img.dtype}")
+            return
+
+        if img.dtype != np.uint8:
+            img = img.astype(np.uint8)
+
+        bgr = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+        self.offscreen_video_writer.write(bgr)
+        self.offscreen_recorded_frames += 1
+
+        if self.auto_record_num_frames > 0 and self.offscreen_recorded_frames >= self.auto_record_num_frames:
+            self.offscreen_recording_active = False
+            self.finalize_recording()
+
+    def finalize_recording(self):
+        if self.offscreen_video_writer is not None:
+            self.offscreen_video_writer.release()
+            self.offscreen_video_writer = None
+            logger.info(
+                f"============ Offscreen video finished writing {self.offscreen_video_path} ({self.offscreen_recorded_frames} frames) ============"
+            )
 
     def setup_viewer(self):
         self.enable_viewer_sync = True
@@ -587,7 +700,18 @@ class IsaacGym(BaseSimulator):
         self.save_rendering_dir.mkdir(parents=True, exist_ok=True)
         self.user_recording_video_path = str(self.save_rendering_dir / f"{self.config.experiment_name}-%s")
 
+        if self.auto_record and not self.offscreen_record:
+            self.user_is_recording = True
+            self.user_recording_state_change = True
+
     def render(self, sync_frame_time=True):
+        if self.offscreen_record:
+            if self.device != 'cpu':
+                self.gym.fetch_results(self.sim, True)
+            self._write_offscreen_frame()
+            if not self.visualize_viewer:
+                return
+
         # check for window closed
         if self.gym.query_viewer_has_closed(self.viewer):
             sys.exit()
@@ -733,6 +857,10 @@ class IsaacGym(BaseSimulator):
                     + "/%04d.png" % self.user_recording_frame,
                 )
                 self.user_recording_frame += 1
+
+                if self.auto_record_num_frames > 0 and self.user_recording_frame >= self.auto_record_num_frames:
+                    self.user_is_recording = False
+                    self.user_recording_state_change = True
 
             if delete_user_viewer_recordings:
                 images = [
