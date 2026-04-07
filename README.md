@@ -2,7 +2,7 @@
 https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 # ASAP-G1-Learning: G1 机器人高难度动作模仿学习记录
 
-本项目是基于 [ASAP](https://github.com/LeCAR-Lab/ASAP) 框架的学习与复现项目。主要目标是让 **Unitree G1** 机器人学会模仿复杂的动作轨迹（如 C罗 Siuuu 起跳），并尝试打通从训练到部署的中间环节。
+本项目是基于 [ASAP](https://github.com/LeCAR-Lab/ASAP) 框架的学习与复现项目，用于个人学习和熟悉Issacgym、Genesis等仿真平台。主要目标是让 **Unitree G1** 机器人学会模仿复杂的动作轨迹（如 C罗 Siuuu 起跳），并尝试打通从训练到部署的中间环节。
 
 > **注**：原项目文档已重命名为 `README_ORIGIN.md`，方便查阅环境配置与官方指南。
 
