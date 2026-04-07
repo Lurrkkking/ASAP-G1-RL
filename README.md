@@ -20,7 +20,8 @@
 
 ## 🙂 目前成果
 1、在Isaacgym训练行走模型后，sim2sim到Genesis进行崎岖地面仿真，频繁摔倒，增加`feet_max_height_for_this_air`抬腿惩罚，解决了被崎岖地面绊倒的问题。
-
+崎岖地面频繁摔倒： Uploading 崎岖行走摔倒.mp4…
+崎岖地面平稳行走：Uploading 崎岖路面行走未摔倒.mp4…
 
 ## ⚠️ 待解决的问题
 - [ ] 起跳高度目前受限于电机力矩软限位，后续考虑微调课程学习（Curriculum）阈值。
