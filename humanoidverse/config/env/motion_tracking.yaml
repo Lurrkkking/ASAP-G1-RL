@@ -13,7 +13,7 @@ env:
       terminate_by_gravity: True
       terminate_by_low_height: False
       terminate_when_motion_end: True
-      terminate_when_motion_far: False
+      terminate_when_motion_far: True  #原代码为False
       terminate_when_close_to_dof_pos_limit: False
       terminate_when_close_to_dof_vel_limit: False
       terminate_when_close_to_torque_limit: False
@@ -21,7 +21,7 @@ env:
       termination_min_base_height : 0.2
       termination_gravity_x : 0.8
       termination_gravity_y : 0.8
-      termination_motion_far_threshold : 1.5
+      termination_motion_far_threshold : 0.3
       termination_close_to_dof_pos_limit : 0.98
       termination_close_to_dof_vel_limit : 0.98
       termination_close_to_torque_limit : 0.98
@@ -30,7 +30,7 @@ env:
       terminate_when_close_to_dof_vel_limit: 0.25
       terminate_when_close_to_torque_limit: 0.25
     termination_curriculum:
-      terminate_when_motion_far_curriculum: False
+      terminate_when_motion_far_curriculum: False   #原代码False，此处开启课程学习，距离阈值会随着机器人的存活步数（越活越久）而动态缩紧
       terminate_when_motion_far_initial_threshold: 1.5
       terminate_when_motion_far_threshold_max: 2.0
       terminate_when_motion_far_threshold_min: 0.25

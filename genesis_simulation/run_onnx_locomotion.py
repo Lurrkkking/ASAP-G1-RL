@@ -11,12 +11,12 @@ from humanoidverse.utils.torch_utils import quat_rotate_inverse
 from collections import deque
 
 URDF_PATH = "/root/autodl-tmp/ASAP/humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.urdf"
-ONNX_PATH = "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260407_155156-MotionTracking_CR7_V2_Fixed-motion_tracking-g1_29dof_anneal_23dof/exported/model_2000.onnx"
+ONNX_PATH = "/root/autodl-tmp/ASAP/logs/TEST/20260406_220219-TEST_Locomotion_resume_from_2300/exported/model_3700.onnx"
 
 # From humanoidverse/config/robot/g1/g1_29dof_anneal_23dof.yaml
 ACTION_SCALE = 0.25
 ACTION_CLIP_VALUE = 100.0
-CONTROL_DECIMATION = 4
+CONTROL_DECIMATION = 41
 SIM_FPS = 200
 SIM_DT = 1.0 / SIM_FPS
 SIM_DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -364,8 +364,8 @@ def main() -> None:
  
 
         # Current state in policy joint order.
-        dof_pos = to_numpy_1d(robot.get_dofs_position(motor_dofs))
-        dof_vel = to_numpy_1d(robot.get_dofs_velocity(motor_dofs))
+        dof_pos = to_numpy_1d(robot.get_dofs_position(dofs_idx_local=motor_dofs))
+        dof_vel = to_numpy_1d(robot.get_dofs_velocity(dofs_idx_local=motor_dofs))
         base_quat_wxyz = as_tensor_2d(robot.get_quat())
         base_quat_xyzw = base_quat_wxyz[:, [1, 2, 3, 0]]
 
@@ -429,13 +429,13 @@ def main() -> None:
 
         # Match training-style PD torque control + torque clipping.
         for _ in range(CONTROL_DECIMATION):
-            dof_pos_sub = to_numpy_1d(robot.get_dofs_position(motor_dofs))
-            dof_vel_sub = to_numpy_1d(robot.get_dofs_velocity(motor_dofs))
+            dof_pos_sub = to_numpy_1d(robot.get_dofs_position(dofs_idx_local=motor_dofs))
+            dof_vel_sub = to_numpy_1d(robot.get_dofs_velocity(dofs_idx_local=motor_dofs))
             torques = KP * (target_dof_pos - dof_pos_sub) - KD * dof_vel_sub
             torques = np.clip(torques, -TORQUE_LIMITS, TORQUE_LIMITS)
             robot.control_dofs_force(
                 torch.tensor(torques, dtype=torch.float32, device=SIM_DEVICE),
-                motor_dofs,
+                dofs_idx_local=motor_dofs,
             )
             scene.step()
         # ========================================================
