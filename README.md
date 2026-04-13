@@ -11,26 +11,24 @@
 ### 1. C罗 Siuuu 动作模仿 (Dynamic Motion Tracking)
 在 0.85 电机力矩软限位及域随机化（Domain Randomization）的严苛条件下，成功实现了完整动作链：**助跑 → 起跳转身 → 空中挥臂 → 落地**。
 
-<details>
 
 
 | Isaac Gym (训练环境) | Genesis (验证环境) |
 | :---: | :---: |
 | <img src="media/CR7_Issacgym.gif" width="400"> | <img src="media/CR7_Genesis.gif" width="400"> |
 
-</details>
+
 
 ### 2. 崎岖地形自适应 (Rough Terrain Robustness)
 在 Isaac Gym 训练出基础行走模型后，零样本（Zero-shot）迁移至 Genesis 的崎岖地面进行测试。针对初期频繁被地形绊倒的问题，通过修改奖励函数进行了针对性优化。
 
-<details>
 
 
 | 优化前（频繁摔倒） | 优化后（稳定跨越） |
 | :---: | :---: |
 | <img src="media/Walk_fall.gif" width="400"> | <img src="media/Walk_Genesis.gif" width="400"> |
 *注：右侧为增加 `feet_max_height_for_this_air` 抬腿惩罚后的表现，大幅提升了地形适应力。*
-</details>
+
 
 ---
 
