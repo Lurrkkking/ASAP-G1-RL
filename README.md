@@ -1,3 +1,6 @@
+![CR7_Issacgym](https://github.com/user-attachments/assets/f40f00c2-f8f4-4396-acd3-6bdb9109d7e6)![CR7_Genesis](https://github.com/user-attachments/assets/9be6a1db-1ace-4717-b217-ab4b936b7eb8)
+
+![sis_1](https://github.com/user-attachments/assets/f5b460b6-b6da-41fa-a060-cd9e455bf493)
 
 https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 # ASAP-G1-Learning: G1 机器人动作模仿学习记录
@@ -26,7 +29,8 @@ https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 
 崎岖地面平稳行走：https://github.com/user-attachments/assets/afb8f8c0-b737-4858-b89c-13d473198c87
 
-## ⚠️ 待解决的问题
+## ⚠️ 待解决的问题![CR7_Issacgym](https://github.com/user-attachments/assets/b479d0a4-03bf-40de-abba-83fc77a3493a)
+
 - [ ] 起跳高度目前受限于电机力矩软限位，后续考虑微调课程学习（Curriculum）阈值。
 - [ ] 落地后的震荡依然存在，需要进一步优化 PD 参数或动作平滑奖励。
 
