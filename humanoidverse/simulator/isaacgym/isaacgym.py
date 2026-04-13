@@ -534,7 +534,7 @@ class IsaacGym(BaseSimulator):
         cam_props.height = self.offscreen_record_height
         self.offscreen_camera_handle = self.gym.create_camera_sensor(self.envs[0], cam_props)
 
-        cam_pos = gymapi.Vec3(0.0, 7.07, 3.0)   # 原来是 (5.0, 5.0, 3.0)
+        cam_pos = gymapi.Vec3(5.0, 5.0, 3.0)   # 原来是 (5.0, 5.0, 3.0)
         cam_target = gymapi.Vec3(0.0, 0.0, 3.0)
         self.gym.set_camera_location(self.offscreen_camera_handle, self.envs[0], cam_pos, cam_target)
 

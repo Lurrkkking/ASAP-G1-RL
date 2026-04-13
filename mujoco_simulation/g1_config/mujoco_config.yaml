@@ -1,0 +1,66 @@
+# mujoco_config
+
+policy_path: "g1_config/model_14000.onnx" 
+cycle_time: 4.4333333333
+time_offset: 0.0
+phase_wrap: false
+stop_at_motion_end: true
+kp_scale: 1.0
+kd_scale: 1.0
+action_filter_alpha: 0.35
+target_pos_rate_limit: 8.0
+safety_check_nonfinite: true
+max_abs_qacc: 50000.0
+solver_iterations: 100
+solver_ls_iterations: 50
+
+xml_path: "g1_urdf/g1_29dof_anneal_23dof.xml"
+
+ 
+num_single_obs: 76
+simulation_dt: 0.001
+simulation_duration: 20.0
+control_decimation: 20
+frame_stack: 4
+
+default_dof_pos: [-0.1, 0.0, 0.0, 0.3, -0.2, 0,
+                  -0.1, 0.0, 0.0, 0.3, -0.2, 0,
+                   0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0,
+                   0.0, 0.0, 0.0, 0.0]
+ 
+
+obs_scale_base_ang_vel: 0.25
+obs_scale_dof_pos: 1.0
+obs_scale_dof_vel: 0.05
+obs_scale_gvec: 1.0
+obs_scale_refmotion: 1.0
+obs_scale_hist: 1.0
+
+
+num_actions: 23
+clip_observations: 100
+clip_actions: 100
+action_scale: 0.25
+
+kps: [100, 100, 100, 200, 20, 20,   
+      100, 100, 100, 200, 20, 20,   
+      400,400,400,  
+      90,60,20,60,  
+      90,60,20,60   
+      ]
+
+kds: [2.5, 2.5, 2.5, 5.0, 0.2, 0.1,  
+      2.5, 2.5, 2.5, 5.0, 0.2, 0.1,
+      5.0, 5.0, 5.0,
+      2.0, 1.0, 0.4, 1.0,
+      2.0, 1.0, 0.4, 1.0]
+ 
+
+tau_limit: [88, 88, 88, 139, 50, 50,
+            88, 88, 88, 139, 50, 50,
+            88, 50, 50,
+            25, 25, 25, 25,
+            25, 25, 25, 25]
+
+ 

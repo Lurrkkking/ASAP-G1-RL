@@ -1,4 +1,3 @@
-
 https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 # ASAP-G1-Learning: G1 机器人动作模仿学习记录
 
@@ -20,11 +19,25 @@ https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 - `humanoidverse/export_pt_to_onnx.py`: 尝试将训练好的 `.pt` 权重导出为 **ONNX** 格式。
 - `genesis_simulation/`: 尝试在 **Genesis** 物理引擎中加载导出的 ONNX 策略。目前已基本跑通推理流程，这比单纯在 Isaac Gym 里验证更接近真实物理表现。运行 `run_onnx.py`可直接导出`Genesis`仿真环境下的视频，补充了原仓库没有`sim2sim`的空缺，便于没有实机的人实验。
 
-## 🙂 目前成果
-1、在Isaacgym训练行走模型后，sim2sim到Genesis进行崎岖地面仿真，频繁摔倒，增加`feet_max_height_for_this_air`抬腿惩罚，解决了被崎岖地面绊倒的问题。
-崎岖地面频繁摔倒：https://github.com/user-attachments/assets/23c23028-39b0-460e-9157-fae0066f52ac
+#### Sim2Sim 可视化（Walk）
+| Isaac Gym | Genesis |
+|---|---|
+| ![Walk in Isaac Gym](media/Walk_Issacgym.gif) | ![Walk in Genesis](media/Walk_Genesis.gif) |
 
-崎岖地面平稳行走：https://github.com/user-attachments/assets/afb8f8c0-b737-4858-b89c-13d473198c87
+#### Sim2Sim 可视化（CR7 Siuuu）
+| Isaac Gym | Genesis |
+|---|---|
+| ![CR7 in Isaac Gym](media/CR7_Issacgym.gif) | ![CR7 in Genesis](media/CR7_Genesis.gif) |
+
+## 🙂 目前成果
+1、在 IsaacGym 训练行走模型后，Sim2Sim 到 Genesis 在崎岖地面测试时出现频繁摔倒；增加 `feet_max_height_for_this_air` 抬腿惩罚后，明显改善了被地形绊倒的问题。
+
+#### 崎岖地面优化前后对比
+| 优化前（频繁摔倒） | 优化后（稳定行走） |
+|---|---|
+| ![Walk fall before tuning](media/Walk_fall.gif) | ![Walk stable after tuning](media/Walk_Genesis.gif) |
+
+2、已训练出 C罗庆祝动作（助跑→起跳转身→空中挥臂→落地），并完成 Isaac Gym 与 Genesis 的动作对比验证。
 
 ## ⚠️ 待解决的问题
 - [ ] 起跳高度目前受限于电机力矩软限位，后续考虑微调课程学习（Curriculum）阈值。

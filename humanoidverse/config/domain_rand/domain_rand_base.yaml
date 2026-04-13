@@ -9,9 +9,9 @@ domain_rand:
   # base com
   randomize_base_com : True
   base_com_range:
-    x : [-0.1., 0.1.]
-    y : [-0.1., 0.1.]
-    z : [-0.1, 0.1]
+    x : [-0.03, 0.03]
+    y : [-0.03, 0.03]
+    z : [-0.05, 0.05]
 
   # link mass
   randomize_link_mass : True
@@ -27,7 +27,8 @@ domain_rand:
   friction_range : [0.5, 1.25]
 
   # base mass
-  randomize_base_mass : False
+  randomize_base_mass : True
+  added_mass_range: [-2.0, 2.0] # 模拟背了点负载或者减重了
 
   # rfi
   randomize_torque_rfi : True

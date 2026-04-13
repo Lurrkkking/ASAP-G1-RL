@@ -62,12 +62,21 @@ class PPODeltaA(PPO):
                     )
             
         pre_process_config(policy_config)
-        
+
+        # Attention-Delta 训练动作空间可扩展到 46，但闭环基策略 checkpoint 通常仍是 23 维。
+        # 这里临时切换 env.config.robot.actions_dim，确保 loaded_policy 的 actor 输出维度与 checkpoint 一致。
+        train_actions_dim = int(self.env.config.robot.actions_dim)
+        base_policy_actions_dim = int(policy_config.robot.actions_dim)
+        self.env.config.robot.actions_dim = base_policy_actions_dim
+
         self.loaded_policy: BaseAlgo = instantiate(policy_config.algo, env=env, device=device, log_dir=None)
         self.loaded_policy.algo_obs_dim_dict = policy_config.env.config.robot.algo_obs_dim_dict
         self.loaded_policy.setup()
 
         self.loaded_policy.load(config.policy_checkpoint)
+
+        # 恢复当前训练任务的动作维度（Attention-Delta: 46）
+        self.env.config.robot.actions_dim = train_actions_dim
 
         
         # import ipdb; ipdb.set_trace()

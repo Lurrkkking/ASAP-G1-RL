@@ -14,7 +14,7 @@ from humanoidverse.utils.torch_utils import quat_rotate_inverse
 URDF_PATH = "/root/autodl-tmp/ASAP/humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.urdf"
 ONNX_PATH = os.environ.get(
     "ONNX_PATH",
-    "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260409_165618-MotionTracking_CR7_FullSystem_V2_Fresh_Resume-motion_tracking-g1_29dof_anneal_23dof/exported/model_8600.onnx",
+    "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260411_104945-MotionTracking_CR7_FullSystem_V2_Fresh_8192-motion_tracking-g1_29dof_anneal_23dof/exported/model_13000.onnx",
 )
 OUTPUT_VIDEO = os.environ.get("OUT_VIDEO", "g1_siuuu_genesis.mp4")
 
@@ -701,7 +701,7 @@ def main():
     if not NO_RECORD:
         cam = scene.add_camera(
             res=(640, 480),
-            pos=(2.0, 2.0, 1.0),
+            pos=(2.0, 2.0, 1.0),   #原(2.0, 2.0, 1.0)
             lookat=(0.0, 0.0, 0.5),
             fov=60,
             GUI=False,
@@ -848,7 +848,7 @@ def main():
         root_z_hist.append(float(root_pos[2]))
         if cam is not None:
             cam.set_pose(
-                pos=(root_pos[0] + 2.0, root_pos[1] + 2.0, 1.0),
+                pos=(root_pos[0] + 0.0, root_pos[1] + 2.8, 1.0),  #原(root_pos[0] + 2.0, root_pos[1] + 2.0, 1.0)
                 lookat=(root_pos[0], root_pos[1], 0.5),
                 up=(0.0, 0.0, 1.0),
             )
