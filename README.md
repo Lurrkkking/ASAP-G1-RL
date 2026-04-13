@@ -27,6 +27,7 @@
 | 优化前（频繁摔倒） | 优化后（稳定跨越） |
 | :---: | :---: |
 | <img src="media/Walk_fall.gif" width="400"> | <img src="media/Walk_Genesis.gif" width="400"> |
+
 *注：右侧为增加 `feet_max_height_for_this_air` 抬腿惩罚后的表现，大幅提升了地形适应力。*
 
 
