@@ -12,12 +12,6 @@
 在 0.85 电机力矩软限位及域随机化（Domain Randomization）的严苛条件下，成功实现了完整动作链：**助跑 → 起跳转身 → 空中挥臂 → 落地**。
 
 <details>
-<summary><b>👉 点击展开：观看 Siuuu 完整起跳视频</b></summary>
-
-https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
-</details>
-
-<details>
 <summary><b>👉 点击展开：Isaac Gym vs Genesis 多视角对比 (CR7 Siuuu)</b></summary>
 
 | Isaac Gym (训练环境) | Genesis (验证环境) |
