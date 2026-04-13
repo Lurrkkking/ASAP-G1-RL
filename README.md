@@ -1,3 +1,4 @@
+
 https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 # ASAP-G1-Learning: G1 机器人动作模仿学习记录
 
@@ -30,16 +31,14 @@ https://github.com/user-attachments/assets/5f21f904-b298-4c03-9fa4-bb6cb4f96215
 | ![CR7 in Isaac Gym](media/CR7_Issacgym.gif) | ![CR7 in Genesis](media/CR7_Genesis.gif) |
 
 ## 🙂 目前成果
-1、在 IsaacGym 训练行走模型后，Sim2Sim 到 Genesis 在崎岖地面测试时出现频繁摔倒；增加 `feet_max_height_for_this_air` 抬腿惩罚后，明显改善了被地形绊倒的问题。
+1、在Isaacgym训练行走模型后，sim2sim到Genesis进行崎岖地面仿真，频繁摔倒，增加`feet_max_height_for_this_air`抬腿惩罚，解决了被崎岖地面绊倒的问题。
+崎岖地面频繁摔倒：https://github.com/user-attachments/assets/23c23028-39b0-460e-9157-fae0066f52ac
 
-#### 崎岖地面优化前后对比
-| 优化前（频繁摔倒） | 优化后（稳定行走） |
-|---|---|
-| ![Walk fall before tuning](media/Walk_fall.gif) | ![Walk stable after tuning](media/Walk_Genesis.gif) |
+崎岖地面平稳行走：https://github.com/user-attachments/assets/afb8f8c0-b737-4858-b89c-13d473198c87
 
-2、已训练出 C罗庆祝动作（助跑→起跳转身→空中挥臂→落地），并完成 Isaac Gym 与 Genesis 的动作对比验证。
-
+![CR7_Issacgym](https://github.com/user-attachments/assets/b479d0a4-03bf-40de-abba-83fc77a3493a)
 ## ⚠️ 待解决的问题
+
 - [ ] 起跳高度目前受限于电机力矩软限位，后续考虑微调课程学习（Curriculum）阈值。
 - [ ] 落地后的震荡依然存在，需要进一步优化 PD 参数或动作平滑奖励。
 
