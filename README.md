@@ -6,7 +6,7 @@
 
 ---
 
-## 🚀 核心成果展示 (Showcase)
+## 🚀 目前成果展示 (Showcase)
 
 ### 1. C罗 Siuuu 动作模仿 (Dynamic Motion Tracking)
 在 0.85 电机力矩软限位及域随机化（Domain Randomization）的严苛条件下，成功实现了完整动作链：**助跑 → 起跳转身 → 空中挥臂 → 落地**。
