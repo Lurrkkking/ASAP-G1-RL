@@ -290,6 +290,9 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
 
 
         
+        if hasattr(self, "_apply_gap_reward_correction"):
+            ref_joint_pos, ref_joint_vel = self._apply_gap_reward_correction(ref_joint_pos, ref_joint_vel)
+
         ## diff compute - kinematic joint position
         self.dif_joint_angles = ref_joint_pos - self.simulator.dof_pos
         ## diff compute - kinematic joint velocity
@@ -637,6 +640,17 @@ class LeggedRobotMotionTracking(LeggedRobotBase):
         diff_joint_vel_dist = (joint_vel_diff**2).mean(dim=-1)
         r_joint_vel = torch.exp(-diff_joint_vel_dist / self.config.rewards.reward_tracking_sigma.teleop_joint_vel)
         return r_joint_vel
+
+    def _reward_attention_sparsity(self):
+        """Attention sparsity penalty.
+
+        For DeltaA environments, alpha_t is expected to be set each step.
+        For plain motion-tracking environments without attention output, return zero
+        so reward config compatibility does not crash env construction.
+        """
+        if hasattr(self, "alpha_t"):
+            return torch.sum(self.alpha_t, dim=-1)
+        return torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)
     
     def setup_visualize_entities(self):
         if self.debug_viz and self.config.simulator.config.name == "genesis":

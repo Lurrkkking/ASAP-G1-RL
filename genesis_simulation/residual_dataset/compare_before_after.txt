@@ -1,0 +1,23 @@
+before: /root/autodl-tmp/ASAP/genesis_simulation/residual_dataset/residual_dataset.npz
+after : /root/autodl-tmp/ASAP/genesis_simulation/residual_dataset/residual_after.npz
+
+[before]
+episodes=20, mean_len=221.00, min_len=221, max_len=221
+valid_steps=4420
+mean||a||=3.1727, p95||a||=4.6411
+mean||Δs||=4.4394, p95||Δs||=13.7636
+mean_root_z=0.7194, min_root_z=0.6391
+
+[after]
+episodes=8, mean_len=221.00, min_len=221, max_len=221
+valid_steps=1768
+mean||a||=3.4024, p95||a||=4.8407
+mean||Δs||=4.4278, p95||Δs||=13.8434
+mean_root_z=0.7256, min_root_z=0.6327
+
+[delta after-before]
+mean_len=+0.00
+valid_steps=-2652
+mean||a||=+0.2297
+mean||Δs||=-0.0117
+min_root_z=-0.0065

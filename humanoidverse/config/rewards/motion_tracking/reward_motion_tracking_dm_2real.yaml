@@ -8,9 +8,9 @@ rewards:
   set_reward_date: 20241025
   only_positive_rewards: False
   reward_scales:
-      teleop_body_position_extend: 1.0      # 躯干（骨盆/重心）绝对空间位置的追踪权重
+      teleop_body_position_extend: 5.0      # 躯干（骨盆/重心）绝对空间位置的追踪权重
       teleop_vr_3point: 0.5                 # VR三点追踪（头显+双手的控制器）。权重较高，保证上肢动作（如C罗挥手）的视觉相似度
-      teleop_body_position_feet: 7.0        # 双脚空间位置追踪。权重最高！双足机器人的落足点直接决定了系统能否保持动态平衡 3到7
+      teleop_body_position_feet: 3.0        # 双脚空间位置追踪。权重最高！双足机器人的落足点直接决定了系统能否保持动态平衡 3到7
       teleop_body_rotation_extend: 0.5      # 躯干空间旋转（横滚、俯仰、偏航）的追踪权重
       teleop_body_ang_velocity_extend: 0.5  # 躯干角速度的追踪权重
       teleop_body_velocity_extend: 0.5      # 躯干线速度的追踪权重
@@ -41,7 +41,7 @@ rewards:
   teleop_body_pos_lowerbody_weight : 3.0    # 下半身位置权重低（给逆运动学留足空间找平衡）
   teleop_body_pos_upperbody_weight : 1.0    # 上半身位置权重高（保证视觉上像人）
 
-  desired_feet_max_height_for_this_air: 0.2 # 期望的腾空最大高度（米）
+  desired_feet_max_height_for_this_air: 0.35 # 期望的腾空最大高度（米）
 
   reward_tracking_sigma:
     teleop_upper_body_pos: 0.03             # 上半身位置误差容忍度：极低（要求高保真）

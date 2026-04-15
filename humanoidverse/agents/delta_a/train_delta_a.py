@@ -41,25 +41,37 @@ class PPODeltaA(PPO):
                  device='cpu'):
         super().__init__(env, config, log_dir, device)
 
-        if config.policy_checkpoint is not None:
-            has_config = True
-            checkpoint = Path(config.policy_checkpoint)
-            config_path = checkpoint.parent / "config.yaml"
-            if not config_path.exists():
-                config_path = checkpoint.parent.parent / "config.yaml"
-                if not config_path.exists():
-                    has_config = False
-                    logger.error(f"Could not find config path: {config_path}")
+        if config.policy_checkpoint is None:
+            raise ValueError("algo.config.policy_checkpoint must be provided for PPODeltaA")
 
-            if has_config:
-                logger.info(f"Loading training config file from {config_path}")
+        checkpoint = Path(config.policy_checkpoint).absolute()
+        has_config = False
+        policy_config = None
+
+        # 搜索路径：在本级或父级寻找 config.yaml
+        search_paths = [
+            checkpoint.parent / "config.yaml",
+            checkpoint.parent.parent / "config.yaml",
+        ]
+
+        for config_path in search_paths:
+            if config_path.exists():
+                logger.info(f"Loaded policy config from {config_path}")
                 with open(config_path) as file:
                     policy_config = OmegaConf.load(file)
+                has_config = True
+                break
 
-                if policy_config.eval_overrides is not None:
-                    policy_config = OmegaConf.merge(
-                        policy_config, policy_config.eval_overrides
-                    )
+        if not has_config:
+            raise FileNotFoundError(
+                f"Could not find config.yaml for policy checkpoint: {checkpoint}. "
+                f"Tried: {search_paths[0]} and {search_paths[1]}"
+            )
+
+        if policy_config.eval_overrides is not None:
+            policy_config = OmegaConf.merge(
+                policy_config, policy_config.eval_overrides
+            )
             
         pre_process_config(policy_config)
 
@@ -90,6 +102,23 @@ class PPODeltaA(PPO):
         self.loaded_policy.eval_policy = self.loaded_policy._get_inference_policy()
         
 
+    def _get_loaded_policy_obs(self, obs_dict):
+        # Prefer obs key matching loaded policy input dim; fallback keeps backward compatibility.
+        try:
+            expected_in = int(self.loaded_policy.actor.actor_module.module[0].in_features)
+        except Exception:
+            expected_in = None
+
+        for key in ("closed_loop_actor_obs", "actor_obs"):
+            if key in obs_dict:
+                x = obs_dict[key]
+                if expected_in is None or int(x.shape[-1]) == expected_in:
+                    return x
+
+        raise KeyError(
+            f"No compatible obs key for loaded_policy; expected_in={expected_in}, "
+            f"available={list(obs_dict.keys())}"
+        )
 
 
     def _rollout_step(self, obs_dict):
@@ -117,7 +146,7 @@ class PPODeltaA(PPO):
                 actor_state["actions"] = actions
                 
                 ################ inference the policy ################
-                policy_output = self.loaded_policy.eval_policy(obs_dict['closed_loop_actor_obs']).detach()
+                policy_output = self.loaded_policy.eval_policy(self._get_loaded_policy_obs(obs_dict)).detach()
                 actor_state["actions_closed_loop"] = policy_output
 
                 ######################################################
@@ -171,7 +200,7 @@ class PPODeltaA(PPO):
 
     def _pre_eval_env_step(self, actor_state: dict):
         actions = self.eval_policy(actor_state["obs"]['actor_obs'])
-        actions_closed_loop = self.loaded_policy.eval_policy(actor_state['obs']['closed_loop_actor_obs']).detach()
+        actions_closed_loop = self.loaded_policy.eval_policy(self._get_loaded_policy_obs(actor_state['obs'])).detach()
 
         actor_state.update({"actions": actions, "actions_closed_loop": actions_closed_loop})
         for c in self.eval_callbacks:

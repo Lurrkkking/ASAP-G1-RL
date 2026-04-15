@@ -7,8 +7,8 @@ phase_wrap: false
 stop_at_motion_end: true
 kp_scale: 1.0
 kd_scale: 1.0
-action_filter_alpha: 0.35
-target_pos_rate_limit: 8.0
+action_filter_alpha: 1.0
+target_pos_rate_limit: 0.0
 safety_check_nonfinite: true
 max_abs_qacc: 50000.0
 solver_iterations: 100
@@ -18,9 +18,9 @@ xml_path: "g1_urdf/g1_29dof_anneal_23dof.xml"
 
  
 num_single_obs: 76
-simulation_dt: 0.001
+simulation_dt: 0.005
 simulation_duration: 20.0
-control_decimation: 20
+control_decimation: 4
 frame_stack: 4
 
 default_dof_pos: [-0.1, 0.0, 0.0, 0.3, -0.2, 0,

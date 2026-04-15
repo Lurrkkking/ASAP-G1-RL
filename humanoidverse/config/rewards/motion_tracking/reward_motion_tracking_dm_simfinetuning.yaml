@@ -59,7 +59,7 @@ rewards:
   # desired_feet_max_height_for_this_air: 0.2
 
   reward_penalty_curriculum: False
-  reward_initial_penalty_scale : 0.10
+  reward_initial_penalty_scale : 1.0
   reward_min_penalty_scale: 0.0
   reward_max_penalty_scale: 1.0
   reward_penalty_level_down_threshold: 40

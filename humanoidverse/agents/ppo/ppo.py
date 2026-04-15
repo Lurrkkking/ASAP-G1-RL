@@ -141,20 +141,31 @@ class PPO(BaseAlgo):
         if ckpt_path is not None:
             logger.info(f"Loading checkpoint from {ckpt_path}")
             loaded_dict = torch.load(ckpt_path, map_location=self.device)
+            
+            # 1. 基础权重加载
             self.actor.load_state_dict(loaded_dict["actor_model_state_dict"])
             self.critic.load_state_dict(loaded_dict["critic_model_state_dict"])
+
+            # 🟢 2. 优化器保护加载逻辑
+            # 只有当设置了加载优化器，且字典中确实存在对应键时才执行
             if self.load_optimizer:
-                self.actor_optimizer.load_state_dict(loaded_dict["actor_optimizer_state_dict"])
-                self.critic_optimizer.load_state_dict(loaded_dict["critic_optimizer_state_dict"])
-                self.actor_learning_rate = loaded_dict['actor_optimizer_state_dict']['param_groups'][0]['lr']
-                self.critic_learning_rate = loaded_dict['critic_optimizer_state_dict']['param_groups'][0]['lr']
-                self.set_learning_rate(self.actor_learning_rate, self.critic_learning_rate)
-                logger.info(f"Optimizer loaded from checkpoint")
-                logger.info(f"Actor Learning rate: {self.actor_learning_rate}")
-                logger.info(f"Critic Learning rate: {self.critic_learning_rate}")
+                if "actor_optimizer_state_dict" in loaded_dict and "critic_optimizer_state_dict" in loaded_dict:
+                    self.actor_optimizer.load_state_dict(loaded_dict["actor_optimizer_state_dict"])
+                    self.critic_optimizer.load_state_dict(loaded_dict["critic_optimizer_state_dict"])
+                    
+                    self.actor_learning_rate = loaded_dict['actor_optimizer_state_dict']['param_groups'][0]['lr']
+                    self.critic_learning_rate = loaded_dict['critic_optimizer_state_dict']['param_groups'][0]['lr']
+                    self.set_learning_rate(self.actor_learning_rate, self.critic_learning_rate)
+                    
+                    logger.info(f"Optimizer loaded from checkpoint")
+                    logger.info(f"Actor Learning rate: {self.actor_learning_rate}")
+                    logger.info(f"Critic Learning rate: {self.critic_learning_rate}")
+                else:
+                    # 针对“手术模型”的静默处理：跳过加载，保留系统初始化的 46 维优化器
+                    logger.warning(f"⚠️ 权重文件中未找到优化器状态（KeyError 风险已规避）。将使用当前初始化的优化器继续训练。")
+
+            # 3. 训练轮数恢复逻辑 (保持原样)
             loaded_iter = loaded_dict.get("iter", 0)
-            # Backward compatibility: older checkpoints saved the wrong iter (often 0).
-            # Recover iteration from filename like model_9500.pt when possible.
             if loaded_iter == 0:
                 ckpt_name = os.path.basename(str(ckpt_path))
                 if ckpt_name.startswith("model_") and ckpt_name.endswith(".pt"):
@@ -166,6 +177,7 @@ class PPO(BaseAlgo):
                             )
                     except ValueError:
                         pass
+            
             self.current_learning_iteration = int(loaded_iter)
             return loaded_dict["infos"]
 

@@ -155,7 +155,16 @@ class BaseTask():
         self.num_dof, self.num_bodies, self.dof_names, self.body_names = self.simulator.num_dof, self.simulator.num_bodies, self.simulator.dof_names, self.simulator.body_names
         
         # check dimensions
-        assert self.num_dof == self.dim_actions, "Number of DOFs must be equal to number of actions"
+        add_extra_action = bool(getattr(self.config, "add_extra_action", False))
+        if self.dim_actions == self.num_dof:
+            pass
+        elif add_extra_action and self.dim_actions == self.num_dof * 2:
+            pass
+        else:
+            raise AssertionError(
+                f"Number of DOFs must equal actions (or 2x with add_extra_action). "
+                f"got dof={self.num_dof}, actions={self.dim_actions}, add_extra_action={add_extra_action}"
+            )
 
         # other properties
         self.num_bodies = len(self.body_names)

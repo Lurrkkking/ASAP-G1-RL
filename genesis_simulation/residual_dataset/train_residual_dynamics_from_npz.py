@@ -24,18 +24,27 @@ class TransitionDataset(Dataset):
     """
 
     def __init__(self, npz_path: Path, target_mode: str = "delta"):
-        if target_mode not in ("delta", "next"):
-            raise ValueError("target_mode must be 'delta' or 'next'")
+        if target_mode not in ("delta", "next", "delta_target"):
+            raise ValueError("target_mode must be 'delta', 'next' or 'delta_target'")
 
         with np.load(npz_path, allow_pickle=False) as d:
-            required = ["s", "a", "s_next"]
+            required = ["s", "a"]
             for k in required:
                 if k not in d:
                     raise KeyError(f"Missing key in npz: {k}")
 
+            has_delta_target = "delta_target" in d
+            has_s_next = "s_next" in d
+
+            if target_mode == "delta_target" and not has_delta_target:
+                raise KeyError("target_mode=delta_target requires key 'delta_target' in npz")
+            if target_mode in ("delta", "next") and not has_s_next:
+                raise KeyError("target_mode=delta/next requires key 's_next' in npz")
+
             s = d["s"].astype(np.float32)
             a = d["a"].astype(np.float32)
-            s_next = d["s_next"].astype(np.float32)
+            s_next = d["s_next"].astype(np.float32) if has_s_next else None
+            delta_target = d["delta_target"].astype(np.float32) if has_delta_target else None
 
             # Convert padded episodes to flat valid transitions.
             if s.ndim == 3:
@@ -50,13 +59,13 @@ class TransitionDataset(Dataset):
                     raise KeyError("Padded NPZ needs either 'mask' or 'episode_lengths'")
 
                 x = np.concatenate([s, a], axis=-1)
-                y = (s_next - s) if target_mode == "delta" else s_next
+                y = delta_target if target_mode == "delta_target" else ((s_next - s) if target_mode == "delta" else s_next)
                 self.x = torch.from_numpy(x[mask])
                 self.y = torch.from_numpy(y[mask])
 
             elif s.ndim == 2:
                 x = np.concatenate([s, a], axis=-1)
-                y = (s_next - s) if target_mode == "delta" else s_next
+                y = delta_target if target_mode == "delta_target" else ((s_next - s) if target_mode == "delta" else s_next)
                 self.x = torch.from_numpy(x)
                 self.y = torch.from_numpy(y)
             else:
@@ -235,8 +244,8 @@ def build_parser():
 
     # Usually adjust these by experiment:
     p.add_argument("--out-dir", type=str, default="/root/autodl-tmp/ASAP/genesis_simulation/residual_dataset/train_out")
-    p.add_argument("--target-mode", type=str, default="delta", choices=["delta", "next"], help="delta: predict s_next-s, next: predict s_next")
-    p.add_argument("--epochs", type=int, default=100)
+    p.add_argument("--target-mode", type=str, default="delta", choices=["delta", "next", "delta_target"], help="delta: predict s_next-s, next: predict s_next, delta_target: predict precomputed s_next_isaac-s_next_genesis")
+    p.add_argument("--epochs", type=int, default=400)
     p.add_argument("--batch-size", type=int, default=4096)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=0.0)

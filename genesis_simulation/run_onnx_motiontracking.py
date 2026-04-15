@@ -14,8 +14,9 @@ from humanoidverse.utils.torch_utils import quat_rotate_inverse
 URDF_PATH = "/root/autodl-tmp/ASAP/humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.urdf"
 ONNX_PATH = os.environ.get(
     "ONNX_PATH",
-    "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260411_104945-MotionTracking_CR7_FullSystem_V2_Fresh_8192-motion_tracking-g1_29dof_anneal_23dof/exported/model_13000.onnx",
+    "/root/autodl-tmp/ASAP/logs/Delta_Patch_Training/20260415_152134-Train_46dim_Patch_Stabilized-delta_a-g1_29dof_anneal_23dof/exported/model_17700.onnx",
 )
+BASE_ONNX_PATH = os.environ.get("BASE_ONNX_PATH", "").strip()
 OUTPUT_VIDEO = os.environ.get("OUT_VIDEO", "g1_siuuu_genesis.mp4")
 
 TRAIN_CONFIG_PATH_ENV = os.environ.get("TRAIN_CONFIG_PATH", "")
@@ -62,6 +63,7 @@ ACTOR_OBS_ORDER = sorted([
 HISTORY_KEY_ORDER = sorted(HISTORY_CFG.keys())
 
 ACTION_SCALE = float(os.environ.get("ACTION_SCALE", "0.25"))
+DELTA_MAX_SCALE = float(os.environ.get("DELTA_MAX_SCALE", "0.02"))
 ACTION_CLIP_VALUE = float(os.environ.get("ACTION_CLIP_VALUE", "100.0"))
 ACTION_FILTER_ALPHA = float(os.environ.get("ACTION_FILTER_ALPHA", "1.0"))
 CONTROL_DECIMATION = int(os.environ.get("CONTROL_DECIMATION", "4"))
@@ -347,6 +349,7 @@ def apply_training_config_overrides():
     global URDF_PATH
     global SCALES, OBS_DIMS, HISTORY_CFG, HISTORY_KEY_ORDER, ACTOR_OBS_ORDER
     global ACTION_SCALE, ACTION_CLIP_VALUE, CONTROL_DECIMATION, SIM_FPS, SIM_DT
+    global DELTA_MAX_SCALE
     global MOTION_DURATION, FLOOR_FRICTION, USE_SELF_COLLISION
     global RL_JOINT_NAMES, BODY_NAMES, DEFAULT_DOF_POS, KP, KD, TORQUE_LIMITS
 
@@ -396,6 +399,8 @@ def apply_training_config_overrides():
         ACTION_SCALE = float(control['action_scale'])
     if (not _env_has('ACTION_CLIP_VALUE')) and ('action_clip_value' in control):
         ACTION_CLIP_VALUE = float(control['action_clip_value'])
+    if (not _env_has('DELTA_MAX_SCALE')) and ('max_delta_scale' in env_cfg):
+        DELTA_MAX_SCALE = float(env_cfg['max_delta_scale'])
 
     stiffness = control.get('stiffness') or {}
     damping = control.get('damping') or {}
@@ -713,8 +718,52 @@ def main():
     session = ort.InferenceSession(ONNX_PATH, providers=providers)
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
+    out_shape = session.get_outputs()[0].shape
+    policy_action_dim = int(out_shape[-1]) if (isinstance(out_shape, (list, tuple)) and isinstance(out_shape[-1], int)) else None
+
+    base_session = None
+    base_input_name = None
+    base_output_name = None
+
+    if policy_action_dim == 46:
+        base_onnx = BASE_ONNX_PATH
+        if not base_onnx:
+            cfg_path = _resolve_train_config_path()
+            if cfg_path is not None:
+                try:
+                    cfg = _load_yaml(cfg_path)
+                    base_ckpt = ((((cfg or {}).get('algo') or {}).get('config') or {}).get('policy_checkpoint'))
+                    if base_ckpt:
+                        base_ckpt = Path(str(base_ckpt))
+                        cand = base_ckpt.parent / 'exported' / (base_ckpt.stem + '.onnx')
+                        if cand.is_file():
+                            base_onnx = str(cand)
+                except Exception:
+                    pass
+
+        if not base_onnx or (not Path(base_onnx).is_file()):
+            raise FileNotFoundError(
+                'Detected 46-dim ONNX (delta+alpha), but no 23-dim base ONNX was found. '
+                'Please set BASE_ONNX_PATH=/path/to/base_23.onnx'
+            )
+
+        base_session = ort.InferenceSession(base_onnx, providers=providers)
+        base_input_name = base_session.get_inputs()[0].name
+        base_output_name = base_session.get_outputs()[0].name
+        base_out_shape = base_session.get_outputs()[0].shape
+        base_dim = int(base_out_shape[-1]) if (isinstance(base_out_shape, (list, tuple)) and isinstance(base_out_shape[-1], int)) else None
+        if base_dim != 23:
+            raise ValueError(f'BASE_ONNX_PATH must output 23 dims, got {base_out_shape}')
+
+    elif policy_action_dim not in (23,):
+        raise ValueError(f'Unsupported ONNX action dim: {out_shape}. Expected 23 or 46.')
+
     print(f"[INFO] ONNX_PATH={ONNX_PATH}")
     print(f"[INFO] ONNX input={session.get_inputs()[0].shape}, output={session.get_outputs()[0].shape}")
+    if base_session is not None:
+        print(f"[INFO] BASE_ONNX_PATH={base_onnx}")
+        print(f"[INFO] BASE ONNX input={base_session.get_inputs()[0].shape}, output={base_session.get_outputs()[0].shape}")
+    print(f"[INFO] policy_action_dim={policy_action_dim}, delta_max_scale={DELTA_MAX_SCALE}")
     control_hz = 1.0 / (SIM_DT * CONTROL_DECIMATION)
     torque_diag_steps = int(np.ceil(max(TORQUE_DIAG_SECONDS, 0.0) / SIM_DT))
     record_fps = resolve_record_fps()
@@ -741,7 +790,9 @@ def main():
         robot.set_dofs_kv(kv=torch.tensor(KD, dtype=torch.float32, device=SIM_DEVICE), dofs_idx_local=motor_dofs)
 
     gravity_world = torch.tensor([[0.0, 0.0, -1.0]], dtype=torch.float32, device=SIM_DEVICE)
-    last_actions = np.zeros(23, dtype=np.float32)
+    last_actions_obs = np.zeros(23, dtype=np.float32)
+    last_policy_action = np.zeros(policy_action_dim if policy_action_dim is not None else 23, dtype=np.float32)
+    last_base_action = np.zeros(23, dtype=np.float32)
     history_buffers = make_history_buffers()
     diag_stats = init_diag_stats() if DIAG_OBS else None
     root_z_hist = []
@@ -791,7 +842,7 @@ def main():
             dof_vel=dof_vel,
             base_ang_vel_body=base_ang_vel_body,
             projected_gravity=projected_gravity,
-            last_actions=last_actions,
+            last_actions=last_actions_obs,
             phase=phase,
         )
 
@@ -806,15 +857,34 @@ def main():
         else:
             actor_obs = build_actor_obs(curr_features, history_actor)
 
-        action = session.run([output_name], {input_name: actor_obs[None, :]})[0][0].astype(np.float32)
-        action = np.clip(action, -ACTION_CLIP_VALUE, ACTION_CLIP_VALUE)
+        policy_action = session.run([output_name], {input_name: actor_obs[None, :]})[0][0].astype(np.float32)
+        policy_action = np.clip(policy_action, -ACTION_CLIP_VALUE, ACTION_CLIP_VALUE)
         if ACTION_FILTER_ALPHA < 0.999:
             # First-order low-pass filter on policy output to suppress jitter.
-            action = ACTION_FILTER_ALPHA * action + (1.0 - ACTION_FILTER_ALPHA) * last_actions
+            policy_action = ACTION_FILTER_ALPHA * policy_action + (1.0 - ACTION_FILTER_ALPHA) * last_policy_action
+
+        if policy_action_dim == 46:
+            raw_delta = policy_action[:23]
+            raw_alpha = policy_action[23:46]
+            alpha = 1.0 / (1.0 + np.exp(-raw_alpha))
+            delta = np.tanh(raw_delta) * DELTA_MAX_SCALE * alpha
+
+            base_action = base_session.run([base_output_name], {base_input_name: actor_obs[None, :]})[0][0].astype(np.float32)
+            base_action = np.clip(base_action, -ACTION_CLIP_VALUE, ACTION_CLIP_VALUE)
+            if ACTION_FILTER_ALPHA < 0.999:
+                base_action = ACTION_FILTER_ALPHA * base_action + (1.0 - ACTION_FILTER_ALPHA) * last_base_action
+
+            action = np.clip(base_action + delta, -ACTION_CLIP_VALUE, ACTION_CLIP_VALUE)
+            next_actions_obs = base_action
+            last_base_action = base_action.copy()
+        else:
+            action = policy_action
+            next_actions_obs = action
 
         # Update history after observation/inference.
         update_history_buffers(history_buffers, curr_features)
-        last_actions = action.copy()
+        last_actions_obs = next_actions_obs.copy()
+        last_policy_action = policy_action.copy()
         action_norm_hist.append(float(np.linalg.norm(action)))
         phase_hist.append(float(phase))
         if TRACE_OUT_NPZ:
