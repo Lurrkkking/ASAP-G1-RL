@@ -2,9 +2,9 @@ import torch
 from pathlib import Path
 
 # 你的旧 23 维权重路径
-old_ckpt_path = "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260411_104945-MotionTracking_CR7_FullSystem_V2_Fresh_8192-motion_tracking-g1_29dof_anneal_23dof/model_13000.pt"
+old_ckpt_path = "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260415_144213-MotionTracking_CR7_Siuuu_Resume_V2_Boost-motion_tracking-g1_29dof_anneal_23dof/model_26600.pt"
 # 新的 46 维权重输出路径
-new_ckpt_path = "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260411_104945-MotionTracking_CR7_FullSystem_V2_Fresh_8192-motion_tracking-g1_29dof_anneal_23dof/model_13000_46dim_init.pt"
+new_ckpt_path = "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/20260415_144213-MotionTracking_CR7_Siuuu_Resume_V2_Boost-motion_tracking-g1_29dof_anneal_23dof/model_26600_46dim_init.pt"
 
 print(f"正在读取旧权重: {old_ckpt_path}")
 ckpt = torch.load(old_ckpt_path, map_location="cpu")

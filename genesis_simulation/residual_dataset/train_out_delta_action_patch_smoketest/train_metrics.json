@@ -1,0 +1,58 @@
+{
+  "dataset_npz": "genesis_simulation/residual_dataset/fixed_state_patch_dataset_26600.npz",
+  "gap_model_ckpt": "genesis_simulation/residual_dataset/train_out_delta_26600_posw16/best_residual_dynamics.pt",
+  "max_delta_scale": 0.02,
+  "root_weight": 1.0,
+  "dof_pos_weight": 1.0,
+  "dof_vel_weight": 1.0,
+  "patch_l2_weight": 10.0,
+  "patch_l1_weight": 1.0,
+  "best_val_loss": 1.0999888181686401,
+  "history": [
+    {
+      "epoch": 1,
+      "train": {
+        "loss": 1.1290392992972762,
+        "gap_loss": 1.1278407337683931,
+        "patch_l2": 2.977697237936164e-06,
+        "patch_l1": 0.001168812141506963
+      },
+      "val": {
+        "loss": 1.1049405336380005,
+        "gap_loss": 1.1034032106399536,
+        "patch_l2": 5.3399608077597804e-06,
+        "patch_l1": 0.001483923988416791
+      }
+    },
+    {
+      "epoch": 2,
+      "train": {
+        "loss": 1.126973827350189,
+        "gap_loss": 1.1245002042773777,
+        "patch_l2": 1.5065993178772746e-05,
+        "patch_l1": 0.0023229413303680756
+      },
+      "val": {
+        "loss": 1.1015794277191162,
+        "gap_loss": 1.0973118543624878,
+        "patch_l2": 4.1273466194979846e-05,
+        "patch_l1": 0.00385481771081686
+      }
+    },
+    {
+      "epoch": 3,
+      "train": {
+        "loss": 1.1244434398804888,
+        "gap_loss": 1.1190468372504387,
+        "patch_l2": 6.315607431991424e-05,
+        "patch_l1": 0.004765081010421017
+      },
+      "val": {
+        "loss": 1.0999888181686401,
+        "gap_loss": 1.093937873840332,
+        "patch_l2": 7.985899719642475e-05,
+        "patch_l1": 0.005252358503639698
+      }
+    }
+  ]
+}

@@ -122,6 +122,9 @@ def main(config: OmegaConf):
     # import ipdb;    ipdb.set_trace()
     if config.checkpoint is not None:
         algo.load(config.checkpoint)
+        if hasattr(algo, "save") and hasattr(algo, "current_learning_iteration"):
+            init_iter = int(algo.current_learning_iteration)
+            algo.save(experiment_save_dir / f"model_{init_iter}.pt", iter_num=init_iter)
 
     # handle saving config
     algo.learn()

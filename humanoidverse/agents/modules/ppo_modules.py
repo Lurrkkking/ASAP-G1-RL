@@ -12,15 +12,22 @@ class PPOActor(nn.Module):
                 obs_dim_dict,
                 module_config_dict,
                 num_actions,
-                init_noise_std):
+                init_noise_std,
+                *,
+                learn_sigma=True):
         super(PPOActor, self).__init__()
 
         module_config_dict = self._process_module_config(module_config_dict, num_actions)
 
         self.actor_module = BaseModule(obs_dim_dict, module_config_dict)
+        self.learn_sigma = bool(learn_sigma)
 
         # Action noise
-        self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
+        init_std = init_noise_std * torch.ones(num_actions)
+        if self.learn_sigma:
+            self.std = nn.Parameter(init_std)
+        else:
+            self.register_buffer("std", init_std)
         self.distribution = None
         # disable args validation for speedup
         Normal.set_default_validate_args = False
@@ -58,6 +65,10 @@ class PPOActor(nn.Module):
     @property
     def entropy(self):
         return self.distribution.entropy().sum(dim=-1)
+
+    def set_std(self, value):
+        with torch.no_grad():
+            self.std.fill_(float(value))
 
     def update_distribution(self, actor_obs):
         mean = self.actor(actor_obs)

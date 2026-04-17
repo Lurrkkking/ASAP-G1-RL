@@ -52,6 +52,8 @@ class PPO(BaseAlgo):
         self.lenbuffer = deque(maxlen=100)
         self.cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         self.cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        self._debug_policy_action_once = os.environ.get("PPO_ACTION_DEBUG_ONCE", "0").lower() in {"1", "true", "yes"}
+        self._debug_policy_action_printed = False
 
         self.eval_callbacks: list[RL_EvalCallback] = []
         self.episode_env_tensors = TensorAverageMeterDict()
@@ -79,6 +81,8 @@ class PPO(BaseAlgo):
         self.schedule = self.config.schedule
         self.actor_learning_rate = self.config.actor_learning_rate
         self.critic_learning_rate = self.config.critic_learning_rate
+        self.init_noise_std = self.config.init_noise_std
+        self.learn_sigma = bool(self.config.get("learn_sigma", True))
         self.clip_param = self.config.clip_param
         self.num_learning_epochs = self.config.num_learning_epochs
         self.num_mini_batches = self.config.num_mini_batches
@@ -88,6 +92,8 @@ class PPO(BaseAlgo):
         self.entropy_coef = self.config.entropy_coef
         self.max_grad_norm = self.config.max_grad_norm
         self.use_clipped_value_loss = self.config.use_clipped_value_loss
+        self.reset_policy_std_on_load = bool(self.config.get("reset_policy_std_on_load", False))
+        self.policy_std_on_load = float(self.config.get("policy_std_on_load", self.init_noise_std))
 
 
     def setup(self):
@@ -102,7 +108,8 @@ class PPO(BaseAlgo):
             obs_dim_dict=self.algo_obs_dim_dict,
             module_config_dict=self.config.module_dict.actor,
             num_actions=self.num_act,
-            init_noise_std=self.config.init_noise_std
+            init_noise_std=self.config.init_noise_std,
+            learn_sigma=self.learn_sigma,
         ).to(self.device)
 
         self.critic = PPOCritic(self.algo_obs_dim_dict,
@@ -177,6 +184,12 @@ class PPO(BaseAlgo):
                             )
                     except ValueError:
                         pass
+
+            if self.reset_policy_std_on_load and hasattr(self.actor, "std"):
+                self.actor.set_std(self.policy_std_on_load)
+                logger.info(
+                    f"Reset actor std after checkpoint load to {self.policy_std_on_load}"
+                )
             
             self.current_learning_iteration = int(loaded_iter)
             return loaded_dict["infos"]
@@ -261,6 +274,28 @@ class PPO(BaseAlgo):
 
         return policy_state_dict
 
+    def _debug_log_policy_action_once(self, actions, action_mean, action_sigma):
+        if (not self._debug_policy_action_once) or self._debug_policy_action_printed:
+            return
+
+        if actions.abs().max().item() <= 1e-6:
+            return
+
+        self._debug_policy_action_printed = True
+
+        def _sample_stats(tensor):
+            v = tensor[0].detach().float().cpu()
+            return (
+                f"mean_abs={v.abs().mean().item():.9f} "
+                f"min={v.min().item():.9f} "
+                f"max={v.max().item():.9f} "
+                f"vec={v.numpy().tolist()}"
+            )
+
+        print(f"[PPO_ACTION_DEBUG] actions sample0: {_sample_stats(actions)}")
+        print(f"[PPO_ACTION_DEBUG] action_mean sample0: {_sample_stats(action_mean)}")
+        print(f"[PPO_ACTION_DEBUG] action_sigma sample0: {_sample_stats(action_sigma)}")
+
     def _rollout_step(self, obs_dict):
         with torch.inference_mode():
             for i in range(self.num_steps_per_env):
@@ -279,6 +314,11 @@ class PPO(BaseAlgo):
                 for obs_ in policy_state_dict.keys():
                     self.storage.update_key(obs_, policy_state_dict[obs_])
                 actions = policy_state_dict["actions"]
+                self._debug_log_policy_action_once(
+                    actions=actions,
+                    action_mean=policy_state_dict["action_mean"],
+                    action_sigma=policy_state_dict["action_sigma"],
+                )
                 actor_state = {}
                 actor_state["actions"] = actions
                 obs_dict, rewards, dones, infos = self.env.step(actor_state)

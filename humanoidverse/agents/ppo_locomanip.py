@@ -71,13 +71,15 @@ class PPOLocoManip(BaseAlgo):
             obs_dim_dict=self.algo_obs_dim_dict,
             module_config_dict=self.config.module_dict.actor_stand,
             num_actions=self.num_act,
-            init_noise_std=self.config.init_noise_std
+            init_noise_std=self.config.init_noise_std,
+            learn_sigma=bool(self.config.get("learn_sigma", True)),
         ).to(self.device)
         self.actor_loco = PPOActor(
             obs_dim_dict=self.algo_obs_dim_dict,
             module_config_dict=self.config.module_dict.actor_loco,
             num_actions=self.num_act,
-            init_noise_std=self.config.init_noise_std
+            init_noise_std=self.config.init_noise_std,
+            learn_sigma=bool(self.config.get("learn_sigma", True)),
         ).to(self.device)
         self.actor = [self.actor_stand, self.actor_loco]
 

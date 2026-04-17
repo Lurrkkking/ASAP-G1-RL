@@ -102,6 +102,17 @@ class ResidualDynamicsMLP(nn.Module):
         return self.net(x)
 
 
+class WeightedMSELoss(nn.Module):
+    """Per-dimension weighted MSE to rebalance root / dof_pos / dof_vel."""
+
+    def __init__(self, weights: torch.Tensor):
+        super().__init__()
+        self.register_buffer("weights", weights.reshape(1, -1))
+
+    def forward(self, pred, target):
+        return (((pred - target) ** 2) * self.weights).mean()
+
+
 def evaluate(model, loader, loss_fn, device):
     model.eval()
     loss_sum = 0.0
@@ -156,7 +167,18 @@ def train(args):
         depth=args.depth,
     ).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    loss_fn = nn.MSELoss()
+    if args.target_mode == "delta_target" and out_dim >= 53:
+        dim_weights = torch.ones(out_dim, dtype=torch.float32, device=device)
+        dim_weights[:7] *= args.root_weight
+        dim_weights[7:30] *= args.dof_pos_weight
+        dim_weights[30:53] *= args.dof_vel_weight
+        loss_fn = WeightedMSELoss(dim_weights)
+        print(
+            "[INFO] WeightedMSE enabled: "
+            f"root={args.root_weight}, dof_pos={args.dof_pos_weight}, dof_vel={args.dof_vel_weight}"
+        )
+    else:
+        loss_fn = nn.MSELoss()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -209,6 +231,9 @@ def train(args):
                     "hidden_dim": args.hidden_dim,
                     "depth": args.depth,
                     "target_mode": args.target_mode,
+                    "root_weight": args.root_weight,
+                    "dof_pos_weight": args.dof_pos_weight,
+                    "dof_vel_weight": args.dof_vel_weight,
                     "npz": str(args.npz),
                     "best_val_loss": best_val,
                 },
@@ -223,6 +248,9 @@ def train(args):
                 "train_size": train_size,
                 "val_size": val_size,
                 "target_mode": args.target_mode,
+                "root_weight": args.root_weight,
+                "dof_pos_weight": args.dof_pos_weight,
+                "dof_vel_weight": args.dof_vel_weight,
                 "best_val_loss": best_val,
                 "history": history,
             },
@@ -253,6 +281,9 @@ def build_parser():
     p.add_argument("--hidden-dim", type=int, default=512)
     p.add_argument("--depth", type=int, default=3)
     p.add_argument("--grad-clip", type=float, default=1.0)
+    p.add_argument("--root-weight", type=float, default=1.0)
+    p.add_argument("--dof-pos-weight", type=float, default=4.0)
+    p.add_argument("--dof-vel-weight", type=float, default=1.0)
 
     # Runtime settings:
     p.add_argument("--device", type=str, default="cuda:0")

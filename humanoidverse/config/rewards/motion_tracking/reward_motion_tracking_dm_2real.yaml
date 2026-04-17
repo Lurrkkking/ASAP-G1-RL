@@ -13,8 +13,8 @@ rewards:
       teleop_body_position_feet: 3.0        # 双脚空间位置追踪。权重最高！双足机器人的落足点直接决定了系统能否保持动态平衡 3到7
       teleop_body_rotation_extend: 0.5      # 躯干空间旋转（横滚、俯仰、偏航）的追踪权重
       teleop_body_ang_velocity_extend: 0.5  # 躯干角速度的追踪权重
-      teleop_body_velocity_extend: 0.5      # 躯干线速度的追踪权重
-      teleop_joint_position: 2.0           # 全身 23 个底层关节角度的追踪权重。允许一定误差，给机器人留出自我找平衡的冗余空间
+      teleop_body_velocity_extend: 0.8     # 躯干线速度的追踪权重
+      teleop_joint_position: 1.5           # 全身 23 个底层关节角度的追踪权重。允许一定误差，给机器人留出自我找平衡的冗余空间
       teleop_joint_velocity: 1.5            # 关节角速度的追踪权重，保证动作节奏一致
       penalty_torques: -0.000001            # 力矩惩罚。强迫机器人“省力”，避免电机长时间满载发热
       # penalty_dof_vel: -0.0001            # 关节速度惩罚。防止关节转得太快
@@ -35,7 +35,7 @@ rewards:
       limits_dof_vel: -5.0                  # 逼近电机最大转速时的惩罚
       limits_torque: -5.0                   # 逼近电机最大扭矩时的惩罚
       termination: -80.0                   # 终止惩罚！一旦发生非脚部的碰撞（比如躯干砸地、摔倒），直接扣除200分并重置环境
-      # feet_max_height_for_this_air: -100.0  # 抬腿惩罚
+      feet_max_height_for_this_air: -80.0  # 抬腿惩罚
       
 
   teleop_body_pos_lowerbody_weight : 3.0    # 下半身位置权重低（给逆运动学留足空间找平衡）
@@ -70,8 +70,8 @@ rewards:
   num_compute_average_epl: 10000            # 计算平均存活帧数（EPL）所依据的最近步数样本量
 
   reward_limit:
-    soft_dof_pos_limit: 0.9                 # 软位置限位：只允许使用关节物理行程的 90%
-    soft_dof_vel_limit: 0.9                 # 软速度限位：只允许跑到电机最大转速的 90%
+    soft_dof_pos_limit: 0.95                 # 软位置限位：只允许使用关节物理行程的 90%
+    soft_dof_vel_limit: 0.95                 # 软速度限位：只允许跑到电机最大转速的 90%
     soft_torque_limit: 0.85                # 软力矩限位：只允许输出额定最大力矩的 82.5%（留下余量保护硬件）
 
     reward_limits_curriculum:
@@ -91,16 +91,17 @@ rewards:
       soft_dof_vel_curriculum_level_down_threshold: 40
       soft_dof_vel_curriculum_level_up_threshold: 42
 
-      soft_torque_curriculum: False           # 开启力矩软限位课程学习
+      soft_torque_curriculum: True           # 开启力矩软限位课程学习
       soft_torque_initial_limit: 1.05        # 起跳初期允许电机超频 15% 输出力矩
       soft_torque_max_limit: 1.15
       soft_torque_min_limit: 0.85            # 最终收紧到 85%
-      soft_torque_curriculum_degree: 0.000025 #(原为 0.00000025)
+      soft_torque_curriculum_degree: 0.0000025 #(原为 0.00000025)
       soft_torque_curriculum_level_down_threshold: 28
       soft_torque_curriculum_level_up_threshold: 42
 
 # 声明哪些奖励项属于“惩罚项”，受上方 Curriculum 缩放比例的控制
   reward_penalty_reward_names : [
+    "feet_max_height_for_this_air",
     "penalty_torques",
     "penalty_dof_acc",
     "penalty_dof_vel",

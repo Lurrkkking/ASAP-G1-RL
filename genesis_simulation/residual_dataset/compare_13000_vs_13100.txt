@@ -1,0 +1,26 @@
+before: /root/autodl-tmp/ASAP/genesis_simulation/residual_dataset/isaac_13000.npz
+after : /root/autodl-tmp/ASAP/genesis_simulation/residual_dataset/isaac_13100.npz
+
+[before]
+episodes=20 motion_end_len=221 mean_len=221.00 min/max=221/221
+fall_rate=0.00% valid_steps=4420
+mean||a||=3.3558 p95||a||=4.7824
+mean||Δs||=4.3005 p95||Δs||=18.4191
+mean_root_z=0.7327 min_root_z=0.6379
+
+[after]
+episodes=20 motion_end_len=221 mean_len=221.00 min/max=221/221
+fall_rate=0.00% valid_steps=4420
+mean||a||=3.3563 p95||a||=4.7823
+mean||Δs||=4.3106 p95||Δs||=18.4188
+mean_root_z=0.7326 min_root_z=0.6379
+
+[delta after-before]
+mean_len=+0.0000
+fall_rate=+0.0000
+mean_a=+0.0005
+p95_a=-0.0001
+mean_ds=+0.0100
+p95_ds=-0.0003
+mean_z=-0.0001
+min_z=-0.0000

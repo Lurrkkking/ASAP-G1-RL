@@ -14,7 +14,7 @@ from humanoidverse.utils.torch_utils import quat_rotate_inverse
 URDF_PATH = "/root/autodl-tmp/ASAP/humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.urdf"
 ONNX_PATH = os.environ.get(
     "ONNX_PATH",
-    "/root/autodl-tmp/ASAP/logs/Delta_Patch_Training/20260415_152134-Train_46dim_Patch_Stabilized-delta_a-g1_29dof_anneal_23dof/exported/model_17700.onnx",
+    "/root/autodl-tmp/ASAP/logs/Frozen_Patch_PPO/20260417_154954-MainPolicy_23dim_FrozenPatch_26600_Gap26600-delta_a-g1_29dof_anneal_23dof/exported/model_28200.onnx",
 )
 BASE_ONNX_PATH = os.environ.get("BASE_ONNX_PATH", "").strip()
 OUTPUT_VIDEO = os.environ.get("OUT_VIDEO", "g1_siuuu_genesis.mp4")

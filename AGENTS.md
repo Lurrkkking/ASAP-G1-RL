@@ -1,5 +1,24 @@
 # Repository Guidelines
 
+IMPORTANT: Before doing residual-gap experiments or reporting metrics from `genesis_simulation/residual_dataset/*`, read `CODEX_HANDOFF.md` in the repo root first.
+
+## Core Algorithmic Principle
+The most important conceptual distinction in this repo is the separation between the residual action model and the PPO main policy.
+
+- The residual action model (`pi^Delta`, delta action model, action patch) is intended to solve a sim-gap / system-identification problem.
+- Its job is: given current state `s_t` and original action `a_t`, output a correction `Delta a_t` so that executing `(a_t + Delta a_t)` in simulation produces physics closer to the desired / real physics outcome.
+- This model is not supposed to optimize motion-tracking reward as its primary objective. Its purpose is environment correction / action compensation.
+
+- The PPO main policy (`pi`) is a separate object with a different optimization target.
+- After the residual action model is trained and frozen, PPO should treat it as a black-box patch inserted in front of the simulator / low-level action execution path.
+- PPO does not need to "understand" the sim-gap directly. PPO's job is simply to maximize motion-tracking reward in the resulting patched environment, i.e. track the fixed reference trajectory as well as possible.
+
+When reading or modifying code, do not collapse these two objectives into one:
+- `pi^Delta` target: reduce sim-gap through action correction.
+- PPO target: maximize tracking reward in the patched environment.
+
+If an implementation or experiment mixes these roles, call that out explicitly instead of assuming the intended algorithmic separation is already preserved.
+
 ## Project Structure & Module Organization
 - `humanoidverse/`: core training and evaluation code (`train_agent.py`, `eval_agent.py`), agents, envs, simulator backends, and Hydra configs under `humanoidverse/config/`.
 - `sim2real/`: deployment and runtime control utilities for sim-to-sim/sim-to-real, including ONNX policies in `sim2real/models/`.

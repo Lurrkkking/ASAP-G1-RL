@@ -31,6 +31,8 @@ class LeggedRobotBase(BaseTask):
         self._prepare_reward_function()
         self.history_handler = HistoryHandler(self.num_envs, config.obs.obs_auxiliary, config.obs.obs_dims, device)
         self.is_evaluating = False
+        self._debug_execution_once = os.environ.get("EXECUTION_DEBUG_ONCE", "0").lower() in {"1", "true", "yes"}
+        self._debug_execution_printed = False
         self.init_done = True
 
     def _init_buffers(self):
@@ -246,6 +248,7 @@ class LeggedRobotBase(BaseTask):
         # compute observations, rewards, resets, ...
         self._check_termination()
         self._compute_reward()
+        self._debug_log_execution_once()
         # check terminations
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_envs_idx(env_ids)
@@ -275,6 +278,81 @@ class LeggedRobotBase(BaseTask):
             self._setup_simulator_next_task()
             if self.debug_viz:
                 self._draw_debug_vis()
+
+    def _debug_log_execution_once(self):
+        if (not self._debug_execution_once) or self._debug_execution_printed:
+            return
+
+        signal = getattr(self, "executed_actions_total", None)
+        if signal is None:
+            signal = self.actions_after_delay * self.config.robot.control.action_scale
+        if signal.abs().max().item() <= 1e-6:
+            return
+
+        # Skip reset/bootstrap samples that do not yet use a real actor action.
+        if self.actions_after_delay.abs().max().item() <= 1e-6:
+            return
+
+        self._debug_execution_printed = True
+
+        def _sample_stats(tensor):
+            v = tensor[0].detach().float().cpu()
+            return (
+                f"mean_abs={v.abs().mean().item():.9f} "
+                f"min={v.min().item():.9f} "
+                f"max={v.max().item():.9f} "
+                f"vec={v.numpy().tolist()}"
+            )
+
+        executed_action_offset = signal
+        target_pos = executed_action_offset + self.default_dof_pos
+        action_clip_limit = float(self.config.robot.control.action_clip_value)
+        action_scale = float(self.config.robot.control.action_scale)
+        torque_ratio = (self.torques.abs() / self.torque_limits.clamp(min=1e-8)).detach().float()
+        dof_vel_ratio = (self.simulator.dof_vel.abs() / self.dof_vel_limits.clamp(min=1e-8)).detach().float()
+
+        print(
+            "[EXECUTION_DEBUG] "
+            f"env={self.__class__.__name__} "
+            f"episode_len={int(self.episode_length_buf[0].item())} "
+            f"reset={int(self.reset_buf[0].item())} "
+            f"timeout={int(self.time_out_buf[0].item())} "
+            f"terminate_by_gravity={int(bool(getattr(self.config.termination, 'terminate_by_gravity', False)))} "
+            f"terminate_when_motion_far={int(bool(getattr(self.config.termination, 'terminate_when_motion_far', False)))} "
+            f"action_scale={action_scale:.9f} "
+            f"action_clip={action_clip_limit:.9f}"
+        )
+        print(f"[EXECUTION_DEBUG] actions_after_delay_norm sample0: {_sample_stats(self.actions_after_delay)}")
+        if hasattr(self, "executed_actions_total"):
+            print(f"[EXECUTION_DEBUG] executed_action_offset_rad sample0: {_sample_stats(executed_action_offset)}")
+        else:
+            print(f"[EXECUTION_DEBUG] executed_action_offset_rad sample0: {_sample_stats(self.actions_after_delay * action_scale)}")
+        print(f"[EXECUTION_DEBUG] target_pos_rad sample0: {_sample_stats(target_pos)}")
+        print(f"[EXECUTION_DEBUG] torques sample0: {_sample_stats(self.torques)}")
+        print(f"[EXECUTION_DEBUG] dof_pos sample0: {_sample_stats(self.simulator.dof_pos)}")
+        print(f"[EXECUTION_DEBUG] dof_vel sample0: {_sample_stats(self.simulator.dof_vel)}")
+        print(f"[EXECUTION_DEBUG] projected_gravity sample0: {_sample_stats(self.projected_gravity)}")
+        print(
+            "[EXECUTION_DEBUG] "
+            f"torque_limit_ratio_sample0_max={torque_ratio[0].max().item():.9f} "
+            f"dof_vel_limit_ratio_sample0_max={dof_vel_ratio[0].max().item():.9f}"
+        )
+        if hasattr(self, "dif_global_body_pos"):
+            motion_far_norm = self.dif_global_body_pos.norm(dim=-1)
+            threshold = getattr(self, "terminate_when_motion_far_threshold", None)
+            threshold_str = "None" if threshold is None else f"{float(threshold):.9f}"
+            print(
+                "[EXECUTION_DEBUG] "
+                f"motion_far_sample0_max={motion_far_norm[0].max().item():.9f} "
+                f"motion_far_sample0_mean={motion_far_norm[0].mean().item():.9f} "
+                f"motion_far_threshold={threshold_str}"
+            )
+        for key in ("upper_body_diff_norm", "lower_body_diff_norm", "vr_3point_diff_norm", "joint_pos_diff_norm", "action_clip_frac"):
+            if key in self.log_dict:
+                value = self.log_dict[key]
+                if torch.is_tensor(value):
+                    value = float(value.detach().cpu().item())
+                print(f"[EXECUTION_DEBUG] {key}={float(value):.9f}")
     
     def _setup_simulator_next_task(self):
         pass

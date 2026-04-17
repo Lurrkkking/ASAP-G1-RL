@@ -204,9 +204,17 @@ def main():
             s_next_genesis=s_next_genesis,
         )
 
+    abs_delta = np.abs(delta_target)
+    mean_abs_all = float(np.mean(abs_delta))
+    if s.ndim == 3:
+        mean_abs_valid = float(np.mean(abs_delta[mask]))
+    else:
+        mean_abs_valid = mean_abs_all
+
     print(f"[DONE] saved: {out_npz}")
     print(f"[INFO] used_samples={count}")
-    print(f"[INFO] mean_abs_delta={float(np.mean(np.abs(delta_target))):.6e}")
+    print(f"[INFO] mean_abs_delta_all={mean_abs_all:.6e}")
+    print(f"[INFO] mean_abs_delta_valid={mean_abs_valid:.6e}")
 
 
 if __name__ == "__main__":
