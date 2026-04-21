@@ -438,6 +438,16 @@ class HitBallTask(LeggedRobotBase):
         self.log_dict["ball_has_contact_rate"] = ball_has_contact.float().mean()
         self.log_dict["candidate_near_ball_rate"] = candidate_near_ball.float().mean()
         self.log_dict["target_contact_gate_open_rate"] = (ball_has_contact & candidate_near_ball).float().mean()
+        active_post_contact = self.has_first_contact & self.first_contact_is_target
+        self.log_dict["post_contact_ball_max_height_mean"] = torch.where(
+            active_post_contact,
+            self.post_contact_ball_max_height,
+            torch.zeros_like(self.post_contact_ball_max_height),
+        ).sum() / active_post_contact.float().sum().clamp(min=1.0)
+        self.log_dict["apex_height_hit_rate"] = (
+            active_post_contact
+            & (self.post_contact_ball_max_height >= self.success_ball_height_min)
+        ).float().sum() / active_post_contact.float().sum().clamp(min=1.0)
 
     def _debug_single_hit_log(self):
         if self.num_envs == 0:
@@ -551,6 +561,17 @@ class HitBallTask(LeggedRobotBase):
         penalty = torch.clamp(xy_speed - self.ball_horizontal_vel_limit, min=0.0)
         active = self.has_first_contact & self.first_contact_is_target
         return -(penalty * active.float())
+
+    def _reward_post_contact_ball_height(self):
+        apex = self.post_contact_ball_max_height
+        target_min = self.success_ball_height_min
+        target_max = self.success_ball_height_max
+        target_center = float(getattr(self.config.rewards, "ball_target_height", 0.5 * (target_min + target_max)))
+        half_width = max(0.5 * (target_max - target_min), 1e-6)
+        score = 1.0 - torch.abs(apex - target_center) / half_width
+        score = torch.clamp(score, min=0.0, max=1.0)
+        active = self.has_first_contact & self.first_contact_is_target
+        return score * active.float()
 
     def _reward_success_bonus(self):
         return self.just_became_success.float()
