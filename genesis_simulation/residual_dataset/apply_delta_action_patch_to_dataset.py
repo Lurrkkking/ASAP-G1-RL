@@ -7,7 +7,14 @@ import torch.nn as nn
 
 
 class DeltaActionPatchMLP(nn.Module):
-    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int = 256, depth: int = 3):
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int = 256,
+        depth: int = 3,
+        out_dim: int = None,
+    ):
         super().__init__()
         layers = []
         d = state_dim + action_dim
@@ -15,7 +22,7 @@ class DeltaActionPatchMLP(nn.Module):
             layers.append(nn.Linear(d, hidden_dim))
             layers.append(nn.ReLU())
             d = hidden_dim
-        layers.append(nn.Linear(d, action_dim))
+        layers.append(nn.Linear(d, action_dim if out_dim is None else out_dim))
         self.net = nn.Sequential(*layers)
 
     def forward(self, s, a_base):
@@ -41,15 +48,27 @@ def main():
     device = torch.device(args.device if torch.cuda.is_available() and "cuda" in args.device else "cpu")
 
     ckpt = torch.load(patch_ckpt, map_location=device)
+    input_action_dim = int(ckpt.get("input_action_dim", ckpt["action_dim"]))
+    output_action_dim = int(ckpt["action_dim"])
     model = DeltaActionPatchMLP(
         state_dim=int(ckpt["state_dim"]),
-        action_dim=int(ckpt["action_dim"]),
+        action_dim=input_action_dim,
         hidden_dim=int(ckpt["hidden_dim"]),
         depth=int(ckpt["depth"]),
+        out_dim=output_action_dim,
     ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     max_delta_scale = float(ckpt["max_delta_scale"])
+    action_dim = input_action_dim
+    if "loss_dof_indices" in ckpt:
+        active_indices = np.asarray(ckpt["loss_dof_indices"], dtype=np.int64)
+    elif "action_dof_indices" in ckpt:
+        active_indices = np.asarray(ckpt["action_dof_indices"], dtype=np.int64)
+    else:
+        active_indices = np.arange(action_dim, dtype=np.int64)
+    active_mask = torch.zeros(action_dim, dtype=torch.float32, device=device)
+    active_mask[torch.as_tensor(active_indices, dtype=torch.long, device=device)] = 1.0
 
     with np.load(dataset_npz, allow_pickle=False) as d:
         s = d["s"].astype(np.float32)
@@ -65,7 +84,10 @@ def main():
         s_t = torch.from_numpy(s).to(device)
         a_base_t = torch.from_numpy(a_base).to(device)
         raw_delta = model(s_t, a_base_t)
-        delta = torch.tanh(raw_delta) * max_delta_scale
+        delta_compact = torch.tanh(raw_delta) * max_delta_scale
+        delta = torch.zeros((s_t.shape[0], action_dim), dtype=delta_compact.dtype, device=device)
+        delta[:, torch.as_tensor(active_indices, dtype=torch.long, device=device)] = delta_compact
+        delta = delta * active_mask.unsqueeze(0)
         a_patch = a_base_t + delta
 
     delta_np = delta.detach().cpu().numpy().astype(np.float32)
@@ -94,7 +116,10 @@ def main():
     )
     print(f"[DONE] saved: {out_npz}")
     print(f"[INFO] num_samples={s.shape[0]}")
+    print(f"[INFO] active_action_indices={active_indices.tolist()}")
     print(f"[INFO] mean_abs_delta_a={float(np.mean(np.abs(delta_np))):.6e}")
+    if active_indices.size > 0:
+        print(f"[INFO] mean_abs_delta_a_active={float(np.mean(np.abs(delta_np[:, active_indices]))):.6e}")
 
 
 if __name__ == "__main__":

@@ -21,9 +21,10 @@
     "robot.motion.motion_file=${MOTION_FILE}" \
     project_name=TEST_CR7_Siuuu \
     experiment_name=${EXP_NAME} \
-    num_envs=12288 \
+    num_envs=3072 \
     headless=True \
     checkpoint=null \
     auto_load_latest=False \
     algo.config.num_mini_batches=4 \
+    ++algo.config.learn_sigma=False \
     algo.config.init_noise_std=0.8

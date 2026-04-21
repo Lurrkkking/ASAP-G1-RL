@@ -157,16 +157,22 @@ class PPO(BaseAlgo):
             # 只有当设置了加载优化器，且字典中确实存在对应键时才执行
             if self.load_optimizer:
                 if "actor_optimizer_state_dict" in loaded_dict and "critic_optimizer_state_dict" in loaded_dict:
-                    self.actor_optimizer.load_state_dict(loaded_dict["actor_optimizer_state_dict"])
-                    self.critic_optimizer.load_state_dict(loaded_dict["critic_optimizer_state_dict"])
-                    
-                    self.actor_learning_rate = loaded_dict['actor_optimizer_state_dict']['param_groups'][0]['lr']
-                    self.critic_learning_rate = loaded_dict['critic_optimizer_state_dict']['param_groups'][0]['lr']
-                    self.set_learning_rate(self.actor_learning_rate, self.critic_learning_rate)
-                    
-                    logger.info(f"Optimizer loaded from checkpoint")
-                    logger.info(f"Actor Learning rate: {self.actor_learning_rate}")
-                    logger.info(f"Critic Learning rate: {self.critic_learning_rate}")
+                    try:
+                        self.actor_optimizer.load_state_dict(loaded_dict["actor_optimizer_state_dict"])
+                        self.critic_optimizer.load_state_dict(loaded_dict["critic_optimizer_state_dict"])
+
+                        self.actor_learning_rate = loaded_dict['actor_optimizer_state_dict']['param_groups'][0]['lr']
+                        self.critic_learning_rate = loaded_dict['critic_optimizer_state_dict']['param_groups'][0]['lr']
+                        self.set_learning_rate(self.actor_learning_rate, self.critic_learning_rate)
+
+                        logger.info(f"Optimizer loaded from checkpoint")
+                        logger.info(f"Actor Learning rate: {self.actor_learning_rate}")
+                        logger.info(f"Critic Learning rate: {self.critic_learning_rate}")
+                    except ValueError as exc:
+                        logger.warning(
+                            "Optimizer state_dict shape mismatch; skipping optimizer load. "
+                            f"This is expected for eval/export or when parameter groups changed. Details: {exc}"
+                        )
                 else:
                     # 针对“手术模型”的静默处理：跳过加载，保留系统初始化的 46 维优化器
                     logger.warning(f"⚠️ 权重文件中未找到优化器状态（KeyError 风险已规避）。将使用当前初始化的优化器继续训练。")

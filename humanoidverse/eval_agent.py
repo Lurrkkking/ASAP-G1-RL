@@ -2,6 +2,16 @@ import os
 import sys
 from pathlib import Path
 
+if os.environ.get("OMP_NUM_THREADS") in {"", "0"}:
+    os.environ["OMP_NUM_THREADS"] = "1"
+
+try:
+    import ninja
+
+    os.environ["PATH"] = str(Path(ninja.BIN_DIR)) + os.pathsep + os.environ.get("PATH", "")
+except Exception:
+    pass
+
 import hydra
 from hydra.utils import instantiate
 from hydra.core.hydra_config import HydraConfig
@@ -117,9 +127,12 @@ def main(override_config: OmegaConf):
     offscreen_record_height = int(config.get("offscreen_record_height", 900))
     offscreen_record_fps = int(config.get("offscreen_record_fps", 50))
 
-    if offscreen_record and config.headless:
-        logger.warning("offscreen_record needs a graphics context; overriding headless=False (use xvfb on headless servers)")
-        config.headless = False
+    if offscreen_record:
+        if not config.headless:
+            logger.info("offscreen_record enabled; forcing headless=True to avoid GLFW viewer creation")
+        else:
+            logger.info("offscreen_record enabled with headless=True; skip GLFW viewer and rely on offscreen camera sensors")
+        config.headless = True
     elif auto_record and config.headless and not offscreen_record:
         logger.warning("auto_record requires viewer rendering; overriding headless=False")
         config.headless = False

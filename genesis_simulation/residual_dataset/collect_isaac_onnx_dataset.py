@@ -156,7 +156,15 @@ def main():
     last_base_action = np.zeros(action_dim_env, dtype=np.float32)
 
     if action_dim_onnx == 46:
-        base_ckpt = Path(str(cfg.algo.config.policy_checkpoint))
+        policy_checkpoint = cfg.algo.config.get("policy_checkpoint", None)
+        if policy_checkpoint in (None, "null", ""):
+            policy_checkpoint = cfg.get("checkpoint", None)
+        if policy_checkpoint in (None, "null", ""):
+            raise ValueError(
+                "46-dim ONNX collection requires a base 23-dim policy checkpoint. "
+                "Set algo.config.policy_checkpoint or checkpoint in config.yaml."
+            )
+        base_ckpt = Path(str(policy_checkpoint))
         base_onnx = base_ckpt.parent / 'exported' / (base_ckpt.stem + '.onnx')
         if not base_onnx.is_file():
             raise FileNotFoundError(f"Base 23-dim ONNX not found: {base_onnx}")

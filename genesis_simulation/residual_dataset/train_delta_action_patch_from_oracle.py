@@ -20,6 +20,7 @@ class OraclePatchDataset(Dataset):
             self.delta_a_star = torch.from_numpy(d["delta_a_star"].astype(np.float32))
             self.sensitivity = torch.from_numpy(d["sensitivity"].astype(np.float32))
             self.sample_weight = torch.from_numpy(d["sample_weight"].astype(np.float32))
+            self.action_dof_indices = d["action_dof_indices"].astype(np.int64) if "action_dof_indices" in d else None
         if self.s.shape[0] == 0:
             raise ValueError("Empty oracle patch dataset")
 
@@ -37,7 +38,14 @@ class OraclePatchDataset(Dataset):
 
 
 class DeltaActionPatchMLP(nn.Module):
-    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int = 256, depth: int = 3):
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int = 256,
+        depth: int = 3,
+        out_dim: int = None,
+    ):
         super().__init__()
         layers = []
         d = state_dim + action_dim
@@ -45,7 +53,7 @@ class DeltaActionPatchMLP(nn.Module):
             layers.append(nn.Linear(d, hidden_dim))
             layers.append(nn.ReLU())
             d = hidden_dim
-        layers.append(nn.Linear(d, action_dim))
+        layers.append(nn.Linear(d, action_dim if out_dim is None else out_dim))
         self.net = nn.Sequential(*layers)
 
     def forward(self, s, a_base):
@@ -69,15 +77,18 @@ class OraclePatchTrainer:
 
         sample_s, sample_a, sample_delta, sample_sens, _ = ds[0]
         self.state_dim = int(sample_s.shape[0])
-        self.action_dim = int(sample_a.shape[0])
-        if sample_delta.shape[0] != self.action_dim or sample_sens.shape[0] != self.action_dim:
+        self.input_action_dim = int(sample_a.shape[0])
+        if sample_delta.shape[0] != self.input_action_dim or sample_sens.shape[0] != self.input_action_dim:
             raise ValueError("Action-target dimension mismatch in oracle dataset")
+        self.loss_dof_indices = self._resolve_loss_dof_indices(ds)
+        self.output_action_dim = int(self.loss_dof_indices.numel())
 
         self.patch_model = DeltaActionPatchMLP(
             state_dim=self.state_dim,
-            action_dim=self.action_dim,
+            action_dim=self.input_action_dim,
             hidden_dim=args.hidden_dim,
             depth=args.depth,
+            out_dim=self.output_action_dim,
         ).to(self.device)
         self.opt = torch.optim.Adam(self.patch_model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
@@ -89,29 +100,55 @@ class OraclePatchTrainer:
         self.last_ckpt_path = self.out_dir / "last_delta_action_patch.pt"
         self.metrics_path = self.out_dir / "train_metrics.json"
 
+    def _resolve_loss_dof_indices(self, ds: OraclePatchDataset):
+        if self.args.loss_dof_indices.strip():
+            indices = np.asarray(
+                [int(x) for x in self.args.loss_dof_indices.split(",") if x.strip() != ""],
+                dtype=np.int64,
+            )
+        elif ds.action_dof_indices is not None:
+            indices = ds.action_dof_indices.astype(np.int64)
+        else:
+            indices = np.arange(self.action_dim, dtype=np.int64)
+
+        if indices.size == 0:
+            raise ValueError("No loss DOF indices were provided")
+        if np.any(indices < 0) or np.any(indices >= self.input_action_dim):
+            raise ValueError(f"loss DOF indices must be in [0, {self.input_action_dim}); got {indices.tolist()}")
+
+        print(f"[INFO] loss/regularization DOF indices: {indices.tolist()}")
+        return torch.as_tensor(indices, dtype=torch.long, device=self.device)
+
     def _checkpoint_payload(self, epoch: int, best_val_loss: float):
         return {
             "model_state_dict": self.patch_model.state_dict(),
             "state_dim": self.state_dim,
-            "action_dim": self.action_dim,
+            "action_dim": self.output_action_dim,
+            "input_action_dim": self.input_action_dim,
             "hidden_dim": self.args.hidden_dim,
             "depth": self.args.depth,
             "max_delta_scale": self.args.max_delta_scale,
+            "loss_dof_indices": self.loss_dof_indices.detach().cpu().numpy().astype(np.int64),
+            "active_action_indices": self.loss_dof_indices.detach().cpu().numpy().astype(np.int64),
             "dataset_npz": self.args.dataset_npz,
             "best_val_loss": best_val_loss,
             "epoch": epoch,
         }
 
     def _loss_terms(self, s, a_base, delta_target, sensitivity, sample_weight):
+        idx = self.loss_dof_indices
+        a_base_loss = a_base.index_select(dim=-1, index=idx)
         raw_delta = self.patch_model(s, a_base)
-        delta_pred = torch.tanh(raw_delta) * self.args.max_delta_scale
-        diff = delta_pred - delta_target
+        delta_pred_loss = torch.tanh(raw_delta) * self.args.max_delta_scale
+        delta_target_loss = delta_target.index_select(dim=-1, index=idx)
+        sensitivity_loss = sensitivity.index_select(dim=-1, index=idx)
+        diff = delta_pred_loss - delta_target_loss
 
         plain_mse_per_sample = torch.mean(diff ** 2, dim=-1)
-        sens_norm = sensitivity / torch.clamp(torch.mean(sensitivity, dim=-1, keepdim=True), min=1e-8)
+        sens_norm = sensitivity_loss / torch.clamp(torch.mean(sensitivity_loss, dim=-1, keepdim=True), min=1e-8)
         jac_mse_per_sample = torch.mean((diff ** 2) * sens_norm, dim=-1)
-        patch_l2_per_sample = torch.mean(delta_pred ** 2, dim=-1)
-        patch_l1_per_sample = torch.mean(torch.abs(delta_pred), dim=-1)
+        patch_l2_per_sample = torch.mean(delta_pred_loss ** 2, dim=-1)
+        patch_l1_per_sample = torch.mean(torch.abs(delta_pred_loss), dim=-1)
 
         sw = sample_weight / torch.clamp(torch.mean(sample_weight), min=1e-8)
         plain_mse = torch.mean(plain_mse_per_sample * sw)
@@ -200,6 +237,7 @@ class OraclePatchTrainer:
                 {
                     "dataset_npz": self.args.dataset_npz,
                     "max_delta_scale": self.args.max_delta_scale,
+                    "loss_dof_indices": self.loss_dof_indices.detach().cpu().numpy().astype(np.int64).tolist(),
                     "delta_mse_weight": self.args.delta_mse_weight,
                     "jacobian_weight": self.args.jacobian_weight,
                     "patch_l2_weight": self.args.patch_l2_weight,
@@ -235,6 +273,15 @@ def main():
     parser.add_argument("--jacobian-weight", type=float, default=1.0)
     parser.add_argument("--patch-l2-weight", type=float, default=1.0)
     parser.add_argument("--patch-l1-weight", type=float, default=0.1)
+    parser.add_argument(
+        "--loss-dof-indices",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated action DOF indices used for supervised loss and patch regularization. "
+            "Defaults to dataset action_dof_indices when present, otherwise all action dims."
+        ),
+    )
     parser.add_argument("--save-every", type=int, default=0)
     args = parser.parse_args()
 

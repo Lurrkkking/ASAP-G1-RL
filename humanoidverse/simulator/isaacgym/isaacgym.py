@@ -55,7 +55,9 @@ class IsaacGym(BaseSimulator):
             self.device = 'cpu'
 
         self.graphics_device_id = self.sim_device_id
-        if self.headless == True:
+        # Offscreen camera sensors still need a graphics device even when we
+        # intentionally skip creating a GLFW viewer.
+        if self.headless and not self.offscreen_record:
             self.graphics_device_id = -1
 
         sim = self.gym.create_sim(

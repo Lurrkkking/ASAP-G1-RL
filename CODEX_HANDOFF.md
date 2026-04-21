@@ -6,6 +6,7 @@ Future Codex sessions should read this before changing:
 - `genesis_simulation/residual_dataset/*`
 - `humanoidverse/envs/delta_a/*`
 - `run_attention_delta.sh`
+- `run_frozen_patch_ppo.sh`
 
 ## Environment Notes
 Use these environments consistently:
@@ -37,18 +38,41 @@ Safe conclusion:
 - current PPO patch training is worse than baseline on the common fixed-state metric
 - self-anchor improvement must not be treated as causal sim-gap reduction
 
-### 3. Offline oracle-supervised patching is the first path that actually beats baseline
+### 3. Offline oracle-supervised patching is the first path that beats the cleaned baseline
 Only corrected evaluator results should be trusted.
 
-Trusted corrected fixed-state results:
-- baseline `26600 on 26600states`: `2.103550434`
+Trusted corrected fixed-state results on the cleaned benchmark:
+- baseline `26600`: `2.020122528`
 - oracle-supervised `p512`: `2.019357000`
 - oracle-supervised `p1024`: `2.012954000`
 
 Interpretation:
-- `p512` is the first trusted offline patch that beats baseline
+- `p512` is the first trusted offline patch that beats the cleaned baseline
 - `p1024` is slightly better than `p512`
 - both are still aggressive and nearly saturate the `0.10` action cap
+
+### 4. Frozen-patch environment plus main-policy PPO now beats the cleaned baseline by a large margin
+This is the current best validated direction.
+
+Trusted fixed-state results for the clean `run_frozen_patch_ppo.sh` line:
+- baseline `26600`: `2.020122528`
+- `model_26650`: `2.017875671`
+- `model_26900`: `1.989935994`
+- `model_27100`: `1.940354466`
+- `model_27300`: `1.960826874`
+- `model_27550`: `1.953179717`
+- `model_27750`: `1.962601423`
+- `model_27950`: `1.912846565`
+- `model_28200`: `1.865794301`
+- `model_29200`: `1.866206646`
+- `model_32500`: `1.813558698`
+
+Interpretation:
+- mounting the frozen offline patch in the environment and then fine-tuning the main PPO policy is now a validated success, not just an integration milestone
+- best current gain is `0.206563830` better than the cleaned baseline, about `10.2%`
+- compared with the offline `p1024` patch alone, `model_32500` gains an additional `0.199395302`
+- the trend is not strictly monotonic, but the line is clearly learning something real after the confounders were removed
+- this now exceeds the offline-patch-only gain and is the main active path
 
 ## Oracle Rollback Notes
 Keep this section even if PPO becomes the active line, because future work may need to roll back to the oracle-supervised pipeline.
@@ -70,7 +94,7 @@ Key oracle-supervised training facts:
 - `p1024` best val loss: `0.003413439961`
 
 Key corrected fixed-state results:
-- baseline `26600 on 26600states`: `2.103550434`
+- baseline `26600`: `2.020122528`
 - oracle-supervised `p512`: `2.019357000`
 - oracle-supervised `p1024`: `2.012954000`
 - extra gain of `p1024` over `p512`: `0.006403000`
@@ -80,7 +104,7 @@ Patch-magnitude caution:
 - `p1024`: `mean_abs_delta_a=0.056779899`, `p95_abs_delta_a=0.097883835`, `p99_abs_delta_a=0.099804811`, `max_abs_delta_a=0.099998951`
 
 Rollback interpretation:
-- if the new PPO-with-frozen-patch line fails, the oracle-supervised path is still the last trusted place to return to
+- if the new PPO-with-frozen-patch line regresses, the oracle-supervised path is still the last trusted pure offline fallback
 - `p1024` is the better frozen checkpoint, but only slightly
 - the main unresolved issue on the oracle line is not basic efficacy anymore; it is how to keep the gain while reducing near-saturated patch magnitude
 - do not discard the oracle artifacts or their evaluation chain when cleaning old experiment outputs
@@ -96,6 +120,21 @@ Primary offline patch artifacts:
 - oracle-supervised `p1024` checkpoint: `genesis_simulation/residual_dataset/train_out_delta_action_patch_from_oracle_v1_p1024_eta05_top50/best_delta_action_patch.pt`
 - `p512` paired delta: `genesis_simulation/residual_dataset/paired_delta_patched_26600_oraclev1_p512_eta05_top50.npz`
 - `p1024` paired delta: `genesis_simulation/residual_dataset/paired_delta_patched_26600_oraclev1_p1024_eta05_top50.npz`
+
+Primary frozen-patch PPO artifacts:
+- best current run: `logs/Frozen_Patch_PPO/20260417_154954-MainPolicy_23dim_FrozenPatch_26600_Gap26600-delta_a-g1_29dof_anneal_23dof`
+- best current checkpoint: `logs/Frozen_Patch_PPO/20260417_154954-MainPolicy_23dim_FrozenPatch_26600_Gap26600-delta_a-g1_29dof_anneal_23dof/model_32500.pt`
+- same-run evaluation checkpoints of interest:
+  - `model_26650.pt`
+  - `model_26900.pt`
+  - `model_27100.pt`
+  - `model_27300.pt`
+  - `model_27550.pt`
+  - `model_27750.pt`
+  - `model_27950.pt`
+  - `model_28200.pt`
+  - `model_29200.pt`
+  - `model_32500.pt`
 
 Primary fixed-state evaluation artifacts:
 - baseline paired delta: `genesis_simulation/residual_dataset/paired_delta_26600_on_26600states.npz`
@@ -139,6 +178,91 @@ Important current limitation:
 - the launch script defaults to frozen `p512` because that was the integration target for this turn
 - if you want the slightly better offline artifact instead, override:
   - `FROZEN_PATCH_CKPT=/root/autodl-tmp/ASAP/genesis_simulation/residual_dataset/train_out_delta_action_patch_from_oracle_v1_p1024_eta05_top50/best_delta_action_patch.pt`
+
+## April 18, 2026 Update: Frozen-Patch PPO Is Now the Leading Validated Path
+This update supersedes the earlier April 17 "integration works but not yet successful" top-line conclusion.
+
+Clean benchmark used in the latest README/user-reported evaluation:
+- baseline `26600`: `2.020122528`
+
+Best validated run:
+- run dir: `logs/Frozen_Patch_PPO/20260417_154954-MainPolicy_23dim_FrozenPatch_26600_Gap26600-delta_a-g1_29dof_anneal_23dof`
+- best checkpoint: `model_32500.pt`
+- best result: `1.813558698`
+
+Same-run progression:
+- `26650`: `2.017875671`
+- `26900`: `1.989935994`
+- `27100`: `1.940354466`
+- `27300`: `1.960826874`
+- `27550`: `1.953179717`
+- `27750`: `1.962601423`
+- `27950`: `1.912846565`
+- `28200`: `1.865794301`
+- `29200`: `1.866206646`
+- `32500`: `1.813558698`
+
+Safe interpretation:
+- after removing confounders and fixing the PPO sigma bug, the clean frozen-patch PPO line does improve the fair fixed-state metric materially
+- the gain is not a tiny fluctuation; the best checkpoint is about `10.2%` better than the cleaned baseline
+- combined with the offline patch, the total improvement over the cleaned baseline is about `13.8%`
+- the main question has shifted from "does this line work at all?" to "why does one-step improvement not yet translate into equally strong long-horizon motion quality?"
+
+Operational priority:
+- treat `run_frozen_patch_ppo.sh` as the main policy-training path
+- treat `run_attention_delta.sh` as an ablation/debug launcher for patch-branch experiments
+- preserve the old April 17 failure/debug notes below as historical diagnosis, not as the current headline result
+
+## April 19, 2026 Update: Re-extract Constrained Knee/Ankle Patch Instead Of Masking A Full-Body Patch
+Recent video checks showed that naively using a full-body oracle patch with only lower-body or lower-waist dimensions enabled can reduce one-step metrics while degrading closed-loop motion quality. The current interpretation is that a full-body oracle solution is a coupled action correction; hard-masking it after training can break the original compensation structure.
+
+New active direction:
+- re-solve the oracle action correction with the action search space constrained to knee/ankle joints only
+- keep full-state inputs intact so the patch can still condition on root, torso, opposite leg, phase/contact state, and whole-body momentum
+- train the patch with masked loss/regularization only on the active knee/ankle output dimensions
+
+G1 knee/ankle action indices:
+- `3`: `left_knee_joint`
+- `4`: `left_ankle_pitch_joint`
+- `5`: `left_ankle_roll_joint`
+- `9`: `right_knee_joint`
+- `10`: `right_ankle_pitch_joint`
+- `11`: `right_ankle_roll_joint`
+
+Code changes already made:
+- `genesis_simulation/residual_dataset/solve_action_star_local_linear.py`
+  - added `--action-dof-indices`
+  - the oracle solve now computes finite-difference Jacobian columns only for those action dimensions
+  - output remains 23D, but non-active dimensions are forced to zero
+  - output stores `action_dof_indices` metadata
+- `genesis_simulation/residual_dataset/build_oracle_patch_dataset.py`
+  - now preserves `action_dof_indices` into the supervised dataset
+  - does not zero or alter full-state features
+- `genesis_simulation/residual_dataset/train_delta_action_patch_from_oracle.py`
+  - now reads dataset `action_dof_indices` by default
+  - `plain_mse`, `jacobian_mse`, `patch_l2`, and `patch_l1` are computed only on active patch joints
+  - optional override: `--loss-dof-indices`
+
+Important anti-footguns:
+- do not train a knee/ankle patch by averaging loss over all 23 action dimensions; zero non-patch dimensions will make the loss look artificially good
+- do not regularize all 23 dimensions when only 6 dimensions are active; report and constrain the active dimensions
+- do not zero full-body state features; knee/ankle residuals may depend on root, torso, opposite leg, and whole-body momentum
+
+Recommended next commands from repo root:
+- environment:
+  - `cd /root/autodl-tmp/ASAP`
+  - `conda activate /root/autodl-tmp/env_genesis`
+- solve constrained oracle labels:
+  - `/root/miniconda3/envs/rl/bin/python genesis_simulation/residual_dataset/solve_action_star_local_linear.py --isaac-npz genesis_simulation/residual_dataset/isaac_26600_anchor.npz --out-npz genesis_simulation/residual_dataset/action_star_local_linear_pilot512_knee_ankle_lam10_delta006.npz --max-samples 512 --ridge-lambda 10.0 --max-delta 0.06 --root-weight 0.0 --dof-pos-weight 1.0 --dof-vel-weight 0.1 --action-dof-indices 3,4,5,9,10,11`
+- build filtered supervised dataset:
+  - `/root/miniconda3/envs/rl/bin/python genesis_simulation/residual_dataset/build_oracle_patch_dataset.py --oracle-npz genesis_simulation/residual_dataset/action_star_local_linear_pilot512_knee_ankle_lam10_delta006.npz --out-npz genesis_simulation/residual_dataset/oracle_patch_dataset_pilot512_knee_ankle_eta05_top50.npz --min-eta 0.05 --topk-frac 0.50`
+- train the supervised knee/ankle patch:
+  - `/root/miniconda3/envs/rl/bin/python genesis_simulation/residual_dataset/train_delta_action_patch_from_oracle.py --dataset-npz genesis_simulation/residual_dataset/oracle_patch_dataset_pilot512_knee_ankle_eta05_top50.npz --out-dir genesis_simulation/residual_dataset/train_out_delta_action_patch_knee_ankle_p512_eta05_top50 --epochs 300 --batch-size 256 --max-delta-scale 0.06 --delta-mse-weight 1.0 --jacobian-weight 1.0 --patch-l2-weight 0.1 --patch-l1-weight 0.01`
+
+After training:
+- apply the new patch to fixed-state data and rebuild paired deltas before judging it
+- if one-step metrics improve without large active-joint saturation, then test it in `run_frozen_patch_ppo.sh` by overriding `FROZEN_PATCH_CKPT` to the new checkpoint
+- when mounting this new patch, use an env mask consistent with the patch: either add a dedicated `knee_ankle` env mask or use the checkpoint output itself if non-active dimensions are exactly zero
 
 ## April 17 Follow-up Notes
 This follow-up clarified the fair comparison target for the new frozen-patch PPO line and added a cleaner control path that removes the 46D trainable head as a variable.
@@ -541,9 +665,173 @@ Not supported:
 - any claim that self-anchor improvement demonstrates causal sim-gap reduction
 - any claim that oracle-supervised gains are already robust to stronger action-magnitude constraints
 
+## April 19, 2026 Update: Tabula Rasa Frozen-Patch PPO + Alpha Curriculum
+This update adds the clean Tabula Rasa control-vs-patch experiment path.
+
+New launcher:
+- `run_frozen_patch_ppo_tabula_rasa.sh`
+
+Purpose:
+- train the main `23D` PPO policy from random initialization
+- mount the frozen offline delta-action patch as part of `DeltaA_ClosedLoop`
+- compare against `run_jump.sh`, which is the no-patch from-scratch control
+
+Current control alignment:
+- `run_jump.sh` and `run_frozen_patch_ppo_tabula_rasa.sh` now both use:
+  - `+domain_rand=domain_rand_base`
+  - `+rewards=motion_tracking/reward_motion_tracking_dm_2real`
+  - `+obs=motion_tracking/deepmimic_a2c_nolinvel_LARGEnoise_history`
+  - `checkpoint=null`
+  - `auto_load_latest=False`
+  - fixed PPO sigma: `learn_sigma=False`, `init_noise_std=0.8`
+- This makes the main experimental variable:
+  - no patch (`run_jump.sh`)
+  - frozen patch environment (`run_frozen_patch_ppo_tabula_rasa.sh`)
+
+Important PPO sigma note:
+- `learn_sigma=False` now actually works after the PPOActor fix.
+- In this mode `actor.std` is a buffer, not an optimizer parameter.
+- This only affects newly started training processes.
+
+Frozen patch alpha curriculum:
+- `DeltaA_ClosedLoop` now supports a global scalar frozen-patch injection schedule:
+  - `frozen_patch_alpha_start`
+  - `frozen_patch_alpha_end`
+  - `frozen_patch_alpha_warmup_steps`
+  - `frozen_patch_alpha_delay_steps`
+  - `frozen_patch_alpha_schedule` (`linear` or `smoothstep`)
+- Actual action composition for the Tabula Rasa path is:
+  - `a_actual = a_base + alpha(t) * delta_patch`
+- The script sets:
+  - `use_policy_action_as_base=True`
+  - `frozen_patch_alpha_start=0.0`
+  - `frozen_patch_alpha_end=0.2`
+  - `frozen_patch_alpha_warmup_steps=2000`
+  - `frozen_patch_alpha_delay_steps=0`
+  - `frozen_patch_alpha_schedule=smoothstep`
+
+Interpretation of the default alpha:
+- the current default frozen patch is `p512`:
+  - `genesis_simulation/residual_dataset/train_out_delta_action_patch_from_oracle_v1_p512_eta05_top50/best_delta_action_patch.pt`
+- that checkpoint stores `max_delta_scale=0.10`
+- with `alpha_end=0.2`, the final effective patch cap is roughly `0.02 rad`
+- this was chosen to avoid the earlier `0.10 rad` full-strength patch causing high-Kp torque spikes and poor early Tabula Rasa learning
+
+Step-unit caution:
+- `frozen_patch_alpha_warmup_steps` is counted in environment steps via `common_step_counter`, not PPO iterations.
+- With `num_steps_per_env=16`, `warmup_steps=2000` is only about `125` PPO iterations.
+- If the intended warmup is about `2000` PPO iterations, set:
+  - `FROZEN_PATCH_ALPHA_WARMUP_STEPS=32000`
+
+Current working hypothesis:
+- The earlier full-strength frozen patch likely disrupted early PPO exploration even if it improved one-step fixed-state metrics.
+- The alpha curriculum tests whether the patch is useful when introduced as a small, delayed/smoothed environment correction rather than as a full-strength modifier from step zero.
+
+Next intended implementation:
+- add a frozen-patch joint mask to `DeltaA_ClosedLoop` and expose it in `run_frozen_patch_ppo_tabula_rasa.sh`
+- motivation:
+  - the current frozen patch is a full `23D` joint patch
+  - upper-body residuals may inject unwanted angular momentum / COM disturbance during run-up and jump
+  - a masked patch may preserve useful lower-body contact compensation while removing upper-body interference
+- proposed mask options:
+  - `all`: no mask, current behavior
+  - `lower`: joints `0..11` only
+  - `lower_waist`: joints `0..14` only, recommended first trial for CR7 because waist may matter for turning/jump
+- intended formula:
+  - `a_actual = a_base + alpha(t) * (M * delta_patch)`
+- recommended first trial after implementation:
+  - `FROZEN_PATCH_MASK=lower_waist`
+  - keep `FROZEN_PATCH_ALPHA_END=0.2`
+  - keep long warmup (`FROZEN_PATCH_ALPHA_WARMUP_STEPS=62000` or similar)
+
+## April 20, 2026 Update: Alpha-Zero Tabula Rasa Patch Debug
+This update records the current diagnosis for why `run_frozen_patch_ppo_tabula_rasa.sh` with patch alpha set to zero can still diverge from pure baseline training.
+
+Runs / sessions checked:
+- `0patch` tmux session: frozen-patch Tabula Rasa run
+- `puredebug` tmux session: pure `run_jump.sh` baseline run
+- active `0patch` no-delay debug run started with:
+  - `./run_frozen_patch_ppo_tabula_rasa.sh ++domain_rand.randomize_ctrl_delay=False 2>&1 | tee /tmp/0patch_nodelay_debug.log`
+- previous delayed debug log:
+  - `/tmp/0patch_debug.log`
+- no-delay debug log:
+  - `/tmp/0patch_nodelay_debug.log`
+
+Confirmed for the alpha-zero `0patch` runs:
+- `FROZEN_PATCH_ALPHA_START=0`
+- `FROZEN_PATCH_ALPHA_END=0`
+- `use_gap_reward=False`
+- `reward_config=motion_tracking/reward_motion_tracking_dm_2real`
+- `domain_rand=domain_rand_base` unless explicitly overridden for the no-delay diagnostic
+- `obs=motion_tracking/deepmimic_a2c_nolinvel_LARGEnoise_history`
+- `checkpoint=null`
+- `auto_load_latest=False`
+- `learn_sigma=False`
+- `init_noise_std=0.8`
+- `env=delta_a_closed_loop`
+
+Important debug result with normal `domain_rand_base`:
+- `/tmp/0patch_debug.log` showed PPO sampled a nonzero action, but `sample0` reached `_compute_torques()` as all zeros.
+- This was not caused by the patch. It was caused by `domain_rand_base` control delay:
+  - `randomize_ctrl_delay=True`
+  - `ctrl_delay_step_range=[0, 3]`
+- The first debug sample can therefore be polluted by the initial delay queue.
+
+Important debug result with control delay disabled:
+- `/tmp/0patch_nodelay_debug.log` is the clean action-chain check.
+- Key values from that log:
+  - `PPO_ACTION_DEBUG actions sample0 mean_abs=0.631277978`
+  - `DELTA_A_DEBUG frozen_patch_alpha=0.000000000`
+  - `DELTA_A_DEBUG frozen_patch_rad sample0 mean_abs=0.000000000`
+  - `DELTA_A_DEBUG train_patch_norm sample0 mean_abs=0.000000000`
+  - `DELTA_A_DEBUG actions_total_norm sample0 mean_abs=0.631277978`
+  - `EXECUTION_DEBUG actions_after_delay_norm sample0 mean_abs=0.631277978`
+  - `EXECUTION_DEBUG executed_action_offset_rad sample0 mean_abs=0.157819495`
+  - `action_scale=0.25`, so `0.631277978 * 0.25 = 0.1578194945`
+- Safe conclusion:
+  - with `alpha=0` and `randomize_ctrl_delay=False`, `DeltaA_ClosedLoop` executes exactly `PPO_action * action_scale`
+  - frozen patch contribution is zero
+  - train patch contribution is zero
+  - action clipping is not active (`action_clip=100`, `action_clip_frac=0`)
+- Therefore the main action post-processing chain is not the explanation for alpha-zero divergence.
+
+Current suspect list after the no-delay check:
+- highest priority: reset / bootstrap / history differences
+  - `DeltaA_ClosedLoop.reset_all()` performs a zero-action `step()` through the wrapper path
+  - baseline `LeggedRobotMotionTracking` uses the base path
+  - this may alter initial `history_actor`, `actions` history, `last_actions`, or first rollout observations
+- second priority: RNG stream differences
+  - the patch environment loads a checkpoint and constructs `delta_model`
+  - even with alpha zero, extra torch operations can shift random number streams before motion sampling, domain randomization, or PPO sampling
+  - unless all seeds and RNG consumption are controlled, two otherwise equivalent RL runs can diverge quickly
+- lower priority after the no-delay debug:
+  - action scaling / clipping / patch addition
+  - patch gradients or patch loss affecting shared parameters
+
+Recommended next diagnostic:
+- Add or run a one-iteration, no-training equivalence probe that compares observations rather than only actions.
+- The useful check is:
+  - instantiate pure `motion_tracking`
+  - instantiate `delta_a_closed_loop` with `frozen_patch_alpha_start=0`, `frozen_patch_alpha_end=0`
+  - disable `randomize_ctrl_delay`
+  - use the same seed, same motion file, same env count
+  - reset both
+  - compare `actor_obs`, `critic_obs`, `hist_obs_dict`, `last_actions`, `motion_start_times`, and first-step `obs_buf_dict`
+- If obs differs before the first real PPO update, the alpha-zero divergence is explained by reset/history/RNG, not by patch action composition.
+
+What puredebug should do next:
+- It does not need to keep running just to prove action equivalence; `0patch_nodelay_debug.log` already proves the patch wrapper action chain is equivalent at alpha zero with delay disabled.
+- If a fair curve comparison is still needed, keep `puredebug` running as the baseline curve for the same wall-clock/iteration range.
+- For the next targeted diagnostic, puredebug should be restarted or supplemented with a short `tee` run so its first-step debug is saved:
+  - `PPO_ACTION_DEBUG_ONCE=1 EXECUTION_DEBUG_ONCE=1 ./run_jump.sh 2>&1 | tee /tmp/puredebug_once.log`
+- Better than another long pure run:
+  - implement the no-training observation equivalence probe above, because current evidence points away from action post-processing and toward initial observations/RNG.
+
 ## Files Most Relevant To The Next Person
 - `run_attention_delta.sh`
 - `run_frozen_patch_ppo.sh`
+- `run_frozen_patch_ppo_tabula_rasa.sh`
+- `run_jump.sh`
 - `humanoidverse/envs/delta_a/delta_a_closed_loop.py`
 - `genesis_simulation/residual_dataset/collect_isaac_from_fixed_states.py`
 - `genesis_simulation/residual_dataset/collect_isaac_from_fixed_actions.py`

@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 from pathlib import Path
 import os
+import pickle
 from isaac_utils.rotations import (
     my_quat_rotate,
     calc_heading_quat_inv,
@@ -47,9 +48,16 @@ class ResidualDynamicsMLP(nn.Module):
         return self.net(x)
 
 class DeltaActionPatchMLP(nn.Module):
-    """Offline delta-action patch: input = [s_t, a_base], output = 23-dim delta_a."""
+    """Offline delta-action patch: input = [s_t, a_base], output = delta on selected joints."""
 
-    def __init__(self, state_dim: int, action_dim: int, hidden_dim: int = 256, depth: int = 3):
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        hidden_dim: int = 256,
+        depth: int = 3,
+        out_dim: int = None,
+    ):
         super().__init__()
         if depth < 1:
             raise ValueError("depth must be >= 1")
@@ -59,7 +67,7 @@ class DeltaActionPatchMLP(nn.Module):
             layers.append(nn.Linear(d, hidden_dim))
             layers.append(nn.ReLU())
             d = hidden_dim
-        layers.append(nn.Linear(d, action_dim))
+        layers.append(nn.Linear(d, action_dim if out_dim is None else out_dim))
         self.net = nn.Sequential(*layers)
 
     def forward(self, s_t, a_base):
@@ -77,7 +85,7 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         # 缓存 raw_delta_a，供观测使用（保持 obs.actions 维度为 23）
         self.raw_delta_a = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         # Distinguish standard PPO-in-patched-env from PPODeltaA patch-training mode.
-        self.use_policy_action_as_base = False
+        self.use_policy_action_as_base = bool(getattr(self.config, "use_policy_action_as_base", False))
         # Cache the final normalized action actually executed by the PD controller.
         self.executed_actions_total = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         self._frozen_patch_cache_valid = False
@@ -88,6 +96,20 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         self._debug_delta_a_printed = False
         # 可配置残差动作最大幅值；默认继承 action_scale
         self.max_delta_scale = float(getattr(self.config, "max_delta_scale", self.config.robot.control.action_scale))
+        self.frozen_patch_alpha_start = float(getattr(self.config, "frozen_patch_alpha_start", 1.0))
+        self.frozen_patch_alpha_end = float(getattr(self.config, "frozen_patch_alpha_end", 1.0))
+        self.frozen_patch_alpha_warmup_steps = int(getattr(self.config, "frozen_patch_alpha_warmup_steps", 0))
+        self.frozen_patch_alpha_delay_steps = int(getattr(self.config, "frozen_patch_alpha_delay_steps", 0))
+        self.frozen_patch_alpha_schedule = str(getattr(self.config, "frozen_patch_alpha_schedule", "linear")).lower()
+        self.current_frozen_patch_alpha = self.frozen_patch_alpha_start
+        self.frozen_patch_mask_mode = str(getattr(self.config, "frozen_patch_mask", "all")).lower()
+        self.frozen_patch_mask = self._build_frozen_patch_mask(self.frozen_patch_mask_mode)
+        self.ankle_only_indices = torch.as_tensor([4, 5, 10, 11], dtype=torch.long, device=self.device)
+        self.patch_active_indices = torch.arange(self.num_dof, dtype=torch.long, device=self.device)
+        self.patch_deadzone = float(getattr(self.config, "patch_deadzone", 0.0))
+        self.patch_rate_limit = float(getattr(self.config, "patch_rate_limit", 0.0))
+        self.patch_lowpass_alpha = float(getattr(self.config, "patch_lowpass_alpha", 1.0))
+        self._filtered_patch_prev = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
 
         # ---------------- 新增：挂载 Attention-Delta 补丁 ----------------
         # 优先兼容 self.cfg.env.config.delta_ckpt_path；不存在时回退 self.config.delta_ckpt_path
@@ -112,7 +134,7 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         if self.use_frozen_patch:
             patch_path = delta_ckpt_path
             print(f"========== 挂载冻结的物理补丁: {patch_path} ==========")
-            patch_state_dict = torch.load(patch_path, map_location=self.device)
+            patch_state_dict = self._safe_load_patch_checkpoint(patch_path)
 
             # 兼容 state_dict 嵌套
             if 'model_state_dict' in patch_state_dict:
@@ -123,21 +145,34 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
             if "state_dim" in patch_state_dict and "action_dim" in patch_state_dict:
                 state_dim = int(patch_state_dict["state_dim"])
                 action_dim = int(patch_state_dict["action_dim"])
+                input_action_dim = int(patch_state_dict.get("input_action_dim", self.num_dof))
                 hidden_dim = int(patch_state_dict.get("hidden_dim", 256))
                 depth = int(patch_state_dict.get("depth", 3))
                 self.frozen_patch_max_delta_scale = float(
                     patch_state_dict.get("max_delta_scale", self.max_delta_scale)
                 )
-                if action_dim != self.num_dof:
+                active_indices = patch_state_dict.get("active_action_indices", patch_state_dict.get("loss_dof_indices"))
+                if active_indices is None:
+                    active_indices = np.arange(action_dim, dtype=np.int64)
+                active_indices = np.asarray(active_indices, dtype=np.int64)
+                if input_action_dim != self.num_dof:
                     raise ValueError(
-                        f"Frozen delta-action patch action_dim={action_dim} does not match num_dof={self.num_dof}."
+                        f"Frozen delta-action patch input_action_dim={input_action_dim} does not match num_dof={self.num_dof}."
+                    )
+                if np.any(active_indices < 0) or np.any(active_indices >= self.num_dof):
+                    raise ValueError(f"Frozen patch active indices out of range: {active_indices.tolist()}")
+                if action_dim != int(active_indices.size):
+                    raise ValueError(
+                        f"Frozen patch output action_dim={action_dim} does not match active index count={int(active_indices.size)}."
                     )
                 self.delta_model = DeltaActionPatchMLP(
                     state_dim=state_dim,
-                    action_dim=action_dim,
+                    action_dim=input_action_dim,
                     hidden_dim=hidden_dim,
                     depth=depth,
+                    out_dim=action_dim,
                 )
+                self.patch_active_indices = torch.as_tensor(active_indices, dtype=torch.long, device=self.device)
                 self.frozen_patch_type = "delta_action_patch"
             else:
                 in_dim = int(patch_state_dict.get("in_dim", 76))
@@ -168,6 +203,16 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
                 "========== 冻结补丁类型: "
                 f"{self.frozen_patch_type}, max_delta_scale={self.frozen_patch_max_delta_scale:.4f} =========="
             )
+            print(
+                "========== 冻结补丁 Alpha Curriculum: "
+                f"start={self.frozen_patch_alpha_start:.4f}, "
+                f"end={self.frozen_patch_alpha_end:.4f}, "
+                f"delay_steps={self.frozen_patch_alpha_delay_steps}, "
+                f"warmup_steps={self.frozen_patch_alpha_warmup_steps}, "
+                f"schedule={self.frozen_patch_alpha_schedule}, "
+                f"mask={self.frozen_patch_mask_mode}, "
+                f"use_policy_action_as_base={self.use_policy_action_as_base} =========="
+            )
         else:
             self.delta_model = None
             print("========== 未提供物理补丁，执行标准 23 维环境 ==========")
@@ -195,6 +240,21 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
             self.gap_model.to(self.device)
             for param in self.gap_model.parameters():
                 param.requires_grad = False
+
+    def _safe_load_patch_checkpoint(self, patch_path):
+        try:
+            return torch.load(patch_path, map_location=self.device, weights_only=False)
+        except ModuleNotFoundError as exc:
+            if exc.name != "numpy._core":
+                raise
+            # Some checkpoints were serialized under a newer NumPy package layout.
+            # Alias numpy._core to numpy.core so torch.load can deserialize them
+            # inside the older rl environment without changing checkpoint contents.
+            import sys
+            import numpy.core as np_core
+
+            sys.modules.setdefault("numpy._core", np_core)
+            return torch.load(patch_path, map_location=self.device, weights_only=False)
 
     def _init_buffers(self):
         super()._init_buffers()
@@ -225,12 +285,29 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         self.closed_loop_actions = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         self.alpha_t = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         self.raw_delta_a = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
-        self.use_policy_action_as_base = False
+        self.use_policy_action_as_base = bool(getattr(self.config, "use_policy_action_as_base", False))
         self.executed_actions_total = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         self._frozen_patch_cache_valid = False
         self._frozen_patch_cache = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         self._frozen_raw_delta_cache = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
         self._frozen_alpha_cache = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
+        self._filtered_patch_prev = torch.zeros(self.num_envs, self.num_dof, device=self.device, requires_grad=False)
+
+    def _build_frozen_patch_mask(self, mode):
+        mask = torch.zeros(self.num_dof, device=self.device, dtype=torch.float)
+        if mode in {"all", "none", ""}:
+            mask[:] = 1.0
+        elif mode == "lower":
+            mask[: min(12, self.num_dof)] = 1.0
+        elif mode == "lower_waist":
+            mask[: min(15, self.num_dof)] = 1.0
+        elif mode == "knee_ankle":
+            for idx in (3, 4, 5, 9, 10, 11):
+                if idx < self.num_dof:
+                    mask[idx] = 1.0
+        else:
+            raise ValueError(f"Unknown frozen_patch_mask: {mode}")
+        return mask.unsqueeze(0)
 
     def _apply_gap_reward_correction(self, ref_joint_pos, ref_joint_vel):
         if not self.use_gap_reward or self.gap_model is None:
@@ -290,6 +367,34 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
     def _target_pos_from_normalized_action(self, actions):
         return actions[:, : self.num_dof] * self.config.robot.control.action_scale + self.default_dof_pos
 
+    def _scatter_patch_delta(self, delta_compact):
+        if delta_compact.shape[1] == self.num_dof:
+            return delta_compact
+        if delta_compact.shape[1] != int(self.patch_active_indices.numel()):
+            raise ValueError(
+                f"Patch compact dim={delta_compact.shape[1]} does not match active index count={int(self.patch_active_indices.numel())}."
+            )
+        delta_full = torch.zeros(delta_compact.shape[0], self.num_dof, device=delta_compact.device, dtype=delta_compact.dtype)
+        delta_full[:, self.patch_active_indices] = delta_compact
+        return delta_full
+
+    def _apply_patch_postprocess(self, delta_full):
+        delta = delta_full
+        if self.patch_deadzone > 0.0:
+            abs_delta = torch.abs(delta)
+            delta = torch.sign(delta) * torch.clamp(abs_delta - self.patch_deadzone, min=0.0)
+        if self.patch_rate_limit > 0.0:
+            delta = self._filtered_patch_prev + torch.clamp(
+                delta - self._filtered_patch_prev,
+                min=-self.patch_rate_limit,
+                max=self.patch_rate_limit,
+            )
+        alpha = float(np.clip(self.patch_lowpass_alpha, 0.0, 1.0))
+        if alpha < 1.0:
+            delta = alpha * delta + (1.0 - alpha) * self._filtered_patch_prev
+        self._filtered_patch_prev.copy_(delta.detach())
+        return delta
+
     def _compute_frozen_patch_action(self, base_actions):
         with torch.no_grad():
             root_states = getattr(self, "root_states", self.simulator.robot_root_states)
@@ -302,7 +407,10 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
                 # positions: target = normalized_action * action_scale + default_dof_pos.
                 base_target_pos = self._target_pos_from_normalized_action(base_actions)
                 raw_delta_a = self.delta_model(s_t, base_target_pos)
-                delta_a = torch.tanh(raw_delta_a) * self.frozen_patch_max_delta_scale
+                delta_compact = torch.tanh(raw_delta_a) * self.frozen_patch_max_delta_scale
+                delta_a = self._scatter_patch_delta(delta_compact)
+                raw_delta_a = self._scatter_patch_delta(raw_delta_a)
+                delta_a = self._apply_patch_postprocess(delta_a)
                 alpha_t = torch.zeros_like(delta_a)
                 return delta_a, raw_delta_a, alpha_t
 
@@ -326,6 +434,25 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
             f"Frozen patch output dim={patch_output.shape[1]} is smaller than required {self.num_dof}."
         )
 
+    def _get_frozen_patch_alpha(self):
+        if not self.use_frozen_patch:
+            return 0.0
+
+        step = max(0, int(getattr(self, "common_step_counter", 0)) - self.frozen_patch_alpha_delay_steps)
+        if self.frozen_patch_alpha_warmup_steps <= 0:
+            progress = 1.0
+        else:
+            progress = min(1.0, max(0.0, step / float(self.frozen_patch_alpha_warmup_steps)))
+
+        if self.frozen_patch_alpha_schedule == "smoothstep":
+            progress = progress * progress * (3.0 - 2.0 * progress)
+        elif self.frozen_patch_alpha_schedule != "linear":
+            raise ValueError(f"Unknown frozen_patch_alpha_schedule: {self.frozen_patch_alpha_schedule}")
+
+        return self.frozen_patch_alpha_start + (
+            self.frozen_patch_alpha_end - self.frozen_patch_alpha_start
+        ) * progress
+
     def _debug_log_delta_a_once(
         self,
         base_actions,
@@ -337,6 +464,7 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         actions_patched,
         actions_total,
         action_scale,
+        frozen_patch_alpha,
     ):
         if (not self._debug_delta_a_once) or self._debug_delta_a_printed:
             return
@@ -382,7 +510,8 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
             f"action_scale={float(action_scale):.9f} "
             f"action_clip={clip_action_limit:.9f} "
             f"train_max_delta_scale={float(self.max_delta_scale):.9f} "
-            f"frozen_patch_max_delta_scale={float(self.frozen_patch_max_delta_scale):.9f}"
+            f"frozen_patch_max_delta_scale={float(self.frozen_patch_max_delta_scale):.9f} "
+            f"frozen_patch_alpha={float(frozen_patch_alpha):.9f}"
         )
         print(f"[DELTA_A_DEBUG] base_actions_norm sample0: {_sample_stats(base_actions)}")
         print(
@@ -432,9 +561,13 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         base_actions = actions[:, : self.num_dof]
         frozen_patch = torch.zeros_like(base_actions)
         frozen_raw_delta = torch.zeros_like(base_actions)
-        if self.use_frozen_patch:
+        frozen_patch_alpha = self._get_frozen_patch_alpha()
+        self.current_frozen_patch_alpha = frozen_patch_alpha
+        if self.use_frozen_patch and abs(float(frozen_patch_alpha)) > 1e-12:
             if not self._frozen_patch_cache_valid:
                 frozen_patch, frozen_raw_delta, frozen_alpha = self._compute_frozen_patch_action(base_actions)
+                frozen_patch = frozen_patch * self.frozen_patch_mask
+                frozen_raw_delta = frozen_raw_delta * self.frozen_patch_mask
                 self._frozen_patch_cache = frozen_patch.clone()
                 self._frozen_raw_delta_cache = frozen_raw_delta.clone()
                 self._frozen_alpha_cache = frozen_alpha.clone()
@@ -442,6 +575,8 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
             else:
                 frozen_patch = self._frozen_patch_cache
                 frozen_raw_delta = self._frozen_raw_delta_cache
+        elif self.use_frozen_patch:
+            self._filtered_patch_prev.zero_()
 
         train_patch = torch.zeros_like(base_actions)
         train_raw_delta = torch.zeros_like(base_actions)
@@ -458,9 +593,9 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
         action_scale = self.config.robot.control.action_scale
         if self.frozen_patch_type == "delta_action_patch":
             # Frozen offline patch is already in joint-radian target-position units.
-            actions_patched = frozen_patch + train_patch * action_scale
+            actions_patched = frozen_patch * frozen_patch_alpha + train_patch * action_scale
         else:
-            actions_patched = (frozen_patch + train_patch) * action_scale
+            actions_patched = (frozen_patch * frozen_patch_alpha + train_patch) * action_scale
         self.raw_delta_a = frozen_raw_delta + train_raw_delta
             
         control_type = self.config.robot.control.control_type
@@ -543,6 +678,7 @@ class DeltaA_ClosedLoop(LeggedRobotMotionTracking):
             actions_patched=actions_patched,
             actions_total=actions_total,
             action_scale=action_scale,
+            frozen_patch_alpha=frozen_patch_alpha,
         )
 
         if control_type == "P":

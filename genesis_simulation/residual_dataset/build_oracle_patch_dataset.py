@@ -37,6 +37,7 @@ def main():
         eta = d["eta"].astype(np.float32)
         improvement = d["improvement"].astype(np.float32)
         weights = d["weights"].astype(np.float32) if "weights" in d else None
+        action_dof_indices = d["action_dof_indices"].astype(np.int64) if "action_dof_indices" in d else None
 
     keep = np.ones((s.shape[0],), dtype=bool)
     keep &= eta >= float(args.min_eta)
@@ -79,6 +80,8 @@ def main():
     }
     if weights is not None:
         payload["state_weights"] = weights
+    if action_dof_indices is not None:
+        payload["action_dof_indices"] = action_dof_indices
 
     np.savez_compressed(out_npz, **payload)
     print(f"[DONE] saved: {out_npz}")

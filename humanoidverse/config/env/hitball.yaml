@@ -1,0 +1,70 @@
+# @package _global_
+
+defaults:
+  - legged_base
+
+env:
+  _target_: humanoidverse.envs.hitball_task.hitball_task.HitBallTask
+  _recursive_: False
+  config:
+    robot: ${robot}
+    domain_rand: ${domain_rand}
+    rewards: ${rewards}
+    terrain: ${terrain}
+    obs: ${obs}
+    env_spacing: 5.0
+    max_episode_length_s: 2.0
+
+    normalization:
+      clip_actions: 100.0
+      clip_observations: 100.0
+
+    target_contact_body: ${robot.right_foot_name}
+    contact_force_threshold: 1.0
+    contact_dist_threshold: 0.22
+    pre_contact_timeout_steps: 30
+    post_contact_eval_steps: 12
+
+    prep_root_pos_noise: [0.01, 0.01, 0.005]
+    prep_root_lin_vel_noise: [0.03, 0.03, 0.02]
+    prep_root_ang_vel_noise: [0.03, 0.03, 0.03]
+    prep_dof_pos_noise_scale: 0.03
+
+    ball_init_offset: [0.20, -0.03, 0.27]
+    ball_init_pos_noise: [0.005, 0.005, 0.005]
+    ball_init_lin_vel: [0.0, 0.0, 0.0]
+    ball_init_lin_vel_noise: [0.0, 0.0, 0.0]
+
+    ball:
+      radius: 0.10
+      mass: 0.43
+      friction: 0.8
+      restitution: 0.45
+      linear_damping: 0.01
+      angular_damping: 0.01
+
+    termination:
+      terminate_by_contact: False
+      terminate_by_gravity: True
+      terminate_by_low_height: False
+      terminate_when_close_to_dof_pos_limit: False
+      terminate_when_close_to_dof_vel_limit: False
+      terminate_when_close_to_torque_limit: False
+      ball_ground_height: 0.12
+      ball_max_height: 2.0
+      ball_max_dist_to_base: 2.5
+
+    termination_scales:
+      termination_gravity_x: 0.8
+      termination_gravity_y: 0.8
+      termination_min_base_height: 0.3
+      termination_close_to_dof_pos_limit: 0.98
+      termination_close_to_dof_vel_limit: 0.98
+      termination_close_to_torque_limit: 0.98
+
+log_task_name: hitball
+
+eval_overrides:
+  env:
+    config:
+      max_episode_length_s: 4.0

@@ -1,7 +1,6 @@
 # Repository Guidelines
 
-IMPORTANT: Before doing residual-gap experiments or reporting metrics from `genesis_simulation/residual_dataset/*`, read `CODEX_HANDOFF.md` in the repo root first.
-
+IMPORTANT: 任务更新，变成足球颠球这种任务驱动的强化学习，而非动作模仿；同时回复给用户的文字尽量简洁，节省token。代码方面：少写不必要的兜底代码。
 ## Core Algorithmic Principle
 The most important conceptual distinction in this repo is the separation between the residual action model and the PPO main policy.
 

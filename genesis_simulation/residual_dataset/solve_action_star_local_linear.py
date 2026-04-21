@@ -122,6 +122,15 @@ def main():
     parser.add_argument("--root-weight", type=float, default=0.0)
     parser.add_argument("--dof-pos-weight", type=float, default=1.0)
     parser.add_argument("--dof-vel-weight", type=float, default=0.1)
+    parser.add_argument(
+        "--action-dof-indices",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated action DOF indices to optimize. "
+            "Leave empty to optimize all action dimensions."
+        ),
+    )
     args = parser.parse_args()
 
     isaac_npz = Path(args.isaac_npz)
@@ -131,9 +140,27 @@ def main():
     scene, robot, motor_dofs = _build_scene()
     action_dim = a_base.shape[-1]
     state_dim = s.shape[-1]
+    if args.action_dof_indices.strip():
+        active_action_indices = np.asarray(
+            [int(x) for x in args.action_dof_indices.split(",") if x.strip() != ""],
+            dtype=np.int64,
+        )
+        if active_action_indices.size == 0:
+            raise ValueError("--action-dof-indices did not contain any valid indices")
+        if np.any(active_action_indices < 0) or np.any(active_action_indices >= action_dim):
+            raise ValueError(
+                f"action_dof_indices must be in [0, {action_dim}); got {active_action_indices.tolist()}"
+            )
+    else:
+        active_action_indices = np.arange(action_dim, dtype=np.int64)
+    active_action_dim = int(active_action_indices.size)
+    print(
+        f"[INFO] optimizing {active_action_dim}/{action_dim} action dims: "
+        f"{active_action_indices.tolist()}"
+    )
     weights = _make_weight_vector(action_dim, args.root_weight, args.dof_pos_weight, args.dof_vel_weight)
     sqrt_weights = np.sqrt(weights).astype(np.float32)
-    regularizer = float(args.ridge_lambda) * np.eye(action_dim, dtype=np.float32)
+    regularizer = float(args.ridge_lambda) * np.eye(active_action_dim, dtype=np.float32)
 
     valid_indices = list(zip(*np.nonzero(mask)))
     if args.max_samples > 0:
@@ -165,22 +192,26 @@ def main():
         base_next = _rollout_one_step(scene, robot, motor_dofs, state, action)
         residual = target_next - base_next
 
-        jacobian = np.zeros((state_dim, action_dim), dtype=np.float32)
-        for action_idx in range(action_dim):
+        jacobian_active = np.zeros((state_dim, active_action_dim), dtype=np.float32)
+        for local_idx, action_idx in enumerate(active_action_indices):
             action_plus = action.copy()
             action_minus = action.copy()
             action_plus[action_idx] += args.eps
             action_minus[action_idx] -= args.eps
             next_plus = _rollout_one_step(scene, robot, motor_dofs, state, action_plus)
             next_minus = _rollout_one_step(scene, robot, motor_dofs, state, action_minus)
-            jacobian[:, action_idx] = (next_plus - next_minus) / (2.0 * args.eps)
+            jacobian_active[:, local_idx] = (next_plus - next_minus) / (2.0 * args.eps)
 
-        weighted_jacobian = jacobian * sqrt_weights[:, None]
+        weighted_jacobian_active = jacobian_active * sqrt_weights[:, None]
+        weighted_jacobian = np.zeros((state_dim, action_dim), dtype=np.float32)
+        weighted_jacobian[:, active_action_indices] = weighted_jacobian_active
         weighted_residual = residual * sqrt_weights
-        lhs = weighted_jacobian.T @ weighted_jacobian + regularizer
-        rhs = weighted_jacobian.T @ weighted_residual
-        delta_star = np.linalg.solve(lhs, rhs).astype(np.float32)
-        delta_star = np.clip(delta_star, -args.max_delta, args.max_delta)
+        lhs = weighted_jacobian_active.T @ weighted_jacobian_active + regularizer
+        rhs = weighted_jacobian_active.T @ weighted_residual
+        delta_star_active = np.linalg.solve(lhs, rhs).astype(np.float32)
+        delta_star_active = np.clip(delta_star_active, -args.max_delta, args.max_delta)
+        delta_star = np.zeros((action_dim,), dtype=np.float32)
+        delta_star[active_action_indices] = delta_star_active
         action_star = (action + delta_star).astype(np.float32)
         star_next = _rollout_one_step(scene, robot, motor_dofs, state, action_star)
 
@@ -201,7 +232,7 @@ def main():
         improvement[out_idx] = base_mae[out_idx] - star_mae[out_idx]
         eta[out_idx] = improvement[out_idx] / max(base_mae[out_idx], 1e-8)
         base_mse[out_idx] = _weighted_mse(base_delta, weights)
-        pred_mse[out_idx] = float(np.mean((weighted_jacobian @ delta_star - weighted_residual) ** 2))
+        pred_mse[out_idx] = float(np.mean((weighted_jacobian_active @ delta_star_active - weighted_residual) ** 2))
         delta_norm[out_idx] = float(np.linalg.norm(delta_star))
 
         print(
@@ -234,6 +265,7 @@ def main():
         ridge_lambda=np.asarray(args.ridge_lambda, dtype=np.float32),
         max_delta=np.asarray(args.max_delta, dtype=np.float32),
         weights=weights,
+        action_dof_indices=active_action_indices.astype(np.int64),
     )
 
     print(f"[DONE] saved: {out_npz}")

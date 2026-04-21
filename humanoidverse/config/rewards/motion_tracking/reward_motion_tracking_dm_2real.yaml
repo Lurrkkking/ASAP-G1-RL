@@ -35,13 +35,13 @@ rewards:
       limits_dof_vel: -5.0                  # 逼近电机最大转速时的惩罚
       limits_torque: -5.0                   # 逼近电机最大扭矩时的惩罚
       termination: -80.0                   # 终止惩罚！一旦发生非脚部的碰撞（比如躯干砸地、摔倒），直接扣除200分并重置环境
-      feet_max_height_for_this_air: -80.0  # 抬腿惩罚
+      #feet_max_height_for_this_air: -80.0  # 抬腿惩罚
       
 
   teleop_body_pos_lowerbody_weight : 3.0    # 下半身位置权重低（给逆运动学留足空间找平衡）
   teleop_body_pos_upperbody_weight : 1.0    # 上半身位置权重高（保证视觉上像人）
 
-  desired_feet_max_height_for_this_air: 0.35 # 期望的腾空最大高度（米）
+  desired_feet_max_height_for_this_air: 0.28 # 期望的腾空最大高度 （米）
 
   reward_tracking_sigma:
     teleop_upper_body_pos: 0.03             # 上半身位置误差容忍度：极低（要求高保真）
