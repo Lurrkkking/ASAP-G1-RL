@@ -79,11 +79,17 @@ def main():
 
     expected_joint_names = load_joint_order(robot_config)
     actual_joint_names = [str(x) for x in data["joint_names"]]
-    if actual_joint_names != expected_joint_names:
-        raise ValueError(
-            "joint_names do not match ASAP robot config order.\n"
-            f"actual={actual_joint_names}\nexpected={expected_joint_names}"
-        )
+    if actual_joint_names == expected_joint_names:
+        joint_indices = np.arange(len(expected_joint_names), dtype=np.int64)
+    else:
+        actual_index_by_name = {name: idx for idx, name in enumerate(actual_joint_names)}
+        missing_expected = [name for name in expected_joint_names if name not in actual_index_by_name]
+        if missing_expected:
+            raise ValueError(
+                "joint_names do not match ASAP robot config order and missing expected joints.\n"
+                f"missing={missing_expected}\nactual={actual_joint_names}\nexpected={expected_joint_names}"
+            )
+        joint_indices = np.asarray([actual_index_by_name[name] for name in expected_joint_names], dtype=np.int64)
 
     axis_by_name = load_mjcf_dof_axes_by_name(mjcf_path)
     missing_axes = [name for name in expected_joint_names if name not in axis_by_name]
@@ -95,13 +101,20 @@ def main():
     root_pos = np.asarray(data["root_pos"], dtype=np.float32)
     root_rot_xyzw = normalize_quat_xyzw(np.asarray(data["root_rot"], dtype=np.float32))
     dof_pos = np.asarray(data["dof_pos"], dtype=np.float32)
+    if dof_pos.ndim != 2:
+        raise ValueError(f"dof_pos must be (T,D), got {dof_pos.shape}")
+    if dof_pos.shape[1] < len(expected_joint_names):
+        raise ValueError(
+            f"dof_pos has fewer joints than expected: got {dof_pos.shape[1]}, expected at least {len(expected_joint_names)}"
+        )
+    dof_pos = dof_pos[:, joint_indices]
 
     if root_pos.ndim != 2 or root_pos.shape[1] != 3:
         raise ValueError(f"root_pos must be (T,3), got {root_pos.shape}")
     if root_rot_xyzw.ndim != 2 or root_rot_xyzw.shape[1] != 4:
         raise ValueError(f"root_rot must be (T,4), got {root_rot_xyzw.shape}")
-    if dof_pos.ndim != 2 or dof_pos.shape[1] != 23:
-        raise ValueError(f"dof_pos must be (T,23), got {dof_pos.shape}")
+    if dof_pos.ndim != 2 or dof_pos.shape[1] != len(expected_joint_names):
+        raise ValueError(f"dof_pos must be (T,{len(expected_joint_names)}), got {dof_pos.shape}")
     if not (len(root_pos) == len(root_rot_xyzw) == len(dof_pos)):
         raise ValueError("Frame count mismatch among root_pos/root_rot/dof_pos")
 

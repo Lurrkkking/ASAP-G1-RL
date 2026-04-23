@@ -1,0 +1,75 @@
+# @package _global_
+
+rewards:
+  set_reward: ball_control_minimal
+  set_reward_date: 20260423
+  only_positive_rewards: False
+
+  reward_scales:
+    reposition_zone_reward: 2.0
+    ball_in_target_state_zone_reward: 1.0
+    control_touch_contact_bonus: 1.0        # 改下面的
+    control_touch_foot_to_ball_reward: 2.0
+    wrong_body_contact_penalty: -1.0        # 改下面的
+    ball_horizontal_vel_penalty: -1.0       # 改下面的
+    ball_overshoot_penalty: -0.5
+    missed_target_state_cycle_penalty: -1.0
+    termination: -70.0
+    penalty_orientation: -0.5
+    penalty_torques: -0.00008
+    penalty_dof_vel: -0.00008
+    penalty_action_rate: -0.5
+
+  reposition_zone_reward_target: [0.35, 0.0, 0.90]  # 补位器希望把球放回的人前方理想控球点
+  reposition_zone_reward_weight: [4.0, 4.0, 2.0]    # xyz三个方向对控球点偏离的惩罚
+  control_zone_x_range: [0.25, 0.65]
+  control_zone_y_range: [-0.25, 0.25]
+  control_zone_z_range: [0.65, 1.15]
+  control_zone_vz_min: 0.001
+  control_touch_contact_bonus: 500.0
+  control_touch_foot_to_ball_alpha: 30.0 # 脚和球的距离reward
+  wrong_body_contact_penalty: 20.0
+  ball_horizontal_vel_penalty: 25.0
+  missed_target_state_cycle_penalty: 50.0
+
+  reward_limit:
+    soft_dof_pos_limit: 0.95
+    soft_dof_vel_limit: 0.95
+    soft_torque_limit: 0.90
+
+    reward_limits_curriculum:
+      soft_dof_pos_curriculum: False
+      soft_dof_pos_initial_limit: 1.15
+      soft_dof_pos_max_limit: 1.15
+      soft_dof_pos_min_limit: 0.95
+      soft_dof_pos_curriculum_degree: 0.00000025
+      soft_dof_pos_curriculum_level_down_threshold: 40
+      soft_dof_pos_curriculum_level_up_threshold: 42
+
+      soft_dof_vel_curriculum: False
+      soft_dof_vel_initial_limit: 1.15
+      soft_dof_vel_max_limit: 1.15
+      soft_dof_vel_min_limit: 0.95
+      soft_dof_vel_curriculum_degree: 0.00000025
+      soft_dof_vel_curriculum_level_down_threshold: 40
+      soft_dof_vel_curriculum_level_up_threshold: 42
+
+      soft_torque_curriculum: False
+      soft_torque_initial_limit: 1.10
+      soft_torque_max_limit: 1.10
+      soft_torque_min_limit: 0.85
+      soft_torque_curriculum_degree: 0.00000025
+      soft_torque_curriculum_level_down_threshold: 40
+      soft_torque_curriculum_level_up_threshold: 42
+
+  reward_penalty_curriculum: False
+  reward_initial_penalty_scale: 1.0
+  reward_min_penalty_scale: 0.0
+  reward_max_penalty_scale: 1.0
+  reward_penalty_level_down_threshold: 100
+  reward_penalty_level_up_threshold: 200
+  reward_penalty_degree: 0.00001
+  num_compute_average_epl: 10000
+  reward_penalty_reward_names: [
+    "penalty_action_rate"
+  ]

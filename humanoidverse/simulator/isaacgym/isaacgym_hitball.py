@@ -17,6 +17,8 @@ class IsaacGym(IsaacGymBase):
         self.ball_mass = float(ball_cfg.get("mass", 0.43))
         self.ball_restitution = float(ball_cfg.get("restitution", 0.45))
         self.ball_friction = float(ball_cfg.get("friction", 0.8))
+        ball_init_pos = self.config.get("ball_init_pos", [0.0, 0.0, 1.0])
+        ball_init_rot = self.config.get("ball_init_rot", [0.0, 0.0, 0.0, 1.0])
 
         ball_options = gymapi.AssetOptions()
         ball_options.density = float(ball_cfg.get("density", 1000.0))
@@ -33,8 +35,8 @@ class IsaacGym(IsaacGymBase):
         self.gym.set_asset_rigid_shape_properties(self.ball_asset, ball_shape_props)
 
         self.ball_start_pose = gymapi.Transform()
-        self.ball_start_pose.p = gymapi.Vec3(0.0, 0.0, 1.0)
-        self.ball_start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+        self.ball_start_pose.p = gymapi.Vec3(*ball_init_pos)
+        self.ball_start_pose.r = gymapi.Quat(*ball_init_rot)
         self.ball_color = gymapi.Vec3(0.95, 0.55, 0.08)
 
     def _build_each_env(self, env_id, env_ptr):

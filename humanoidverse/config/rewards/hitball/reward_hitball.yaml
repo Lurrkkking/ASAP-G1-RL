@@ -8,20 +8,30 @@ rewards:
   reward_scales:
     # 任务核心 reward
     alive: 0.2
-    pre_contact_alignment: 2.0
+    pre_contact_prep_xy_alignment: 0.5
+    pre_contact_swing_alignment: 3.0
     first_right_foot_contact_bonus: 50.0
-    post_contact_upward_vel: 15.0
-    post_contact_ball_height: 20.0
-    success_bonus: 130.0
-    wrong_body_contact_penalty: 100.0
-    ball_horizontal_vel_penalty: 1.0
+    post_contact_upward_vel: 75.0
+    post_contact_ball_height: 30.0
+    success_bonus: 200.0
+    wrong_body_contact_penalty: 300.0
+    ball_horizontal_vel_penalty: 30.0
+
+    # 弱 motion-prior tracking：只做右腿/右脚/躯干的阶段化先验，不进入 obs,调大了
+    
+    tracking_joint_position_lower_body: 1.0
+    tracking_joint_position_right_ankle: 8.0   # 脚踝，绷直，最重要的跟踪关节
+    tracking_joint_position_upper_body: 1.0
+    tracking_body_position_feet: 4.0
+    tracking_body_position_upper_body: 3.0
+    tracking_body_rotation_trunk: 1.0
 
     # 底座稳定性 reward
-    penalty_action_rate: -0.01
-    penalty_torques: -0.00002
-    penalty_dof_vel: -0.0002
+    penalty_action_rate: -0.2
+    penalty_torques: -0.00008
+    penalty_dof_vel: -0.0008
     penalty_orientation: -0.5
-    limits_torque: -0.05
+    limits_torque: -0.1
 
   reward_limit:
     soft_dof_pos_limit: 0.95
@@ -53,16 +63,65 @@ rewards:
       soft_torque_curriculum_level_down_threshold: 40
       soft_torque_curriculum_level_up_threshold: 42
 
-  ball_target_height: 1.2
-  ball_target_upward_vel_min: 1.5
-  ball_target_upward_vel_max: 4.0
+  ball_target_height: 1.0
+  ball_target_upward_vel_min: 0.8
+  ball_target_upward_vel_max: 2.0
   ball_horizontal_vel_limit: 1.0
-  pre_contact_target_offset: [0.10, 0.0, 0.10]
+  pre_contact_prep_xy_weight: [1.0, 1.5]
+  pre_contact_prep_xy_alpha: 12.0
+  pre_contact_swing_target_offset: [0.10, 0.0, 0.10]
 
-  success_ball_height_min: 1.0
-  success_ball_height_max: 1.6
-  success_upward_vel_min: 1.5
-  success_upward_vel_max: 4.0
+  tracking_lower_body_dof_names: [
+    "right_hip_pitch_joint",
+    "right_hip_roll_joint",
+    "right_hip_yaw_joint",
+    "right_knee_joint",
+    "right_ankle_pitch_joint",
+    "right_ankle_roll_joint"
+  ]
+  tracking_upper_body_dof_names: [
+    "left_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",
+    "left_shoulder_yaw_joint",
+    "left_elbow_joint",
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint"
+  ]
+  tracking_feet_body_names: ["right_ankle_roll_link"]
+  tracking_upper_body_names: [
+    "left_shoulder_pitch_link",
+    "left_shoulder_roll_link",
+    "left_shoulder_yaw_link",
+    "left_elbow_link",
+    "right_shoulder_pitch_link",
+    "right_shoulder_roll_link",
+    "right_shoulder_yaw_link",
+    "right_elbow_link"
+  ]
+  tracking_trunk_body_names: ["pelvis", "torso_link"]
+  tracking_joint_pos_sigma: 0.25
+  tracking_right_ankle_dof_names: [
+    "right_ankle_pitch_joint",
+    "right_ankle_roll_joint"
+  ]
+  tracking_right_ankle_pos_sigma: 0.12
+  tracking_upper_body_joint_pos_sigma: 0.25
+  tracking_feet_pos_sigma: 0.03
+  tracking_upper_body_pos_sigma: 0.04
+  tracking_trunk_rot_sigma: 0.50
+  tracking_phase_gates:
+    pre_contact_prep: 0.25
+    pre_contact_swing: 1.0
+    contacted: 0.8
+    post_contact_eval: 0.6
+    done: 0.0
+
+  success_ball_height_min: 0.8
+  success_ball_height_max: 1.2
+  success_upward_vel_min: 0.8
+  success_upward_vel_max: 2.0
 
   reward_penalty_curriculum: False
   reward_initial_penalty_scale: 1.0

@@ -4,7 +4,7 @@ defaults:
   - legged_base
 
 env:
-  _target_: humanoidverse.envs.hitball_task.hitball_task.HitBallTask
+  _target_: humanoidverse.envs.ball_control_task.ball_control_task.BallControlTask
   _recursive_: False
   config:
     robot: ${robot}
@@ -19,32 +19,20 @@ env:
       clip_actions: 100.0
       clip_observations: 100.0
 
+    control_target_center: [0.45, 0.0, 0.90]
+    control_touch_window_steps: 8
+    control_touch_vz_trigger_max: 0.0
     target_contact_body: ${robot.right_foot_name}
     contact_force_threshold: 1.0
-    contact_dist_threshold: 0.22
-    pre_contact_timeout_steps: 30
-    post_contact_eval_steps: 200
-    prep_target_xy: [0.35, 0.0]
-    prep_xy_tolerance: [0.08, 0.08]
-    prep_to_swing_require_z_valid: False
-    prep_min_ball_height: 0.12
-    prep_max_ball_height: 1.6
-    motion_prior_random_sample: False
-    motion_prior_start_time_s: 0.0
-    motion_prior_time_scale: 1.0
-    motion_time_anchor_prep: 0.0      #动作跟踪的3个具体阶段，否则每次模板动作都从0开始
-    motion_time_anchor_swing: 0.20
-    motion_time_anchor_post: 0.66
-
-    prep_root_pos_noise: [0.01, 0.01, 0.005]
-    prep_root_lin_vel_noise: [0.03, 0.03, 0.02]
-    prep_root_ang_vel_noise: [0.03, 0.03, 0.03]
-    prep_dof_pos_noise_scale: 0.03
-
-    ball_init_offset: [0.48, 0.0, 0.75]  # 原0.35 -0.03 1.0
+    ball_contact_force_threshold: 1.0
+    contact_dist_threshold: 0.18
+    ball_contact_min_height: 0.12
+    ball_init_offset: [0.35, 0.0, 0.75]
     ball_init_pos_noise: [0.005, 0.005, 0.005]
     ball_init_lin_vel: [0.0, 0.0, 0.0]
     ball_init_lin_vel_noise: [0.0, 0.0, 0.0]
+    ball_init_pos: [0.0, 0.0, 1.0]
+    ball_init_rot: [0.0, 0.0, 0.0, 1.0]
 
     ball:
       radius: 0.10
@@ -62,8 +50,6 @@ env:
       terminate_when_close_to_dof_vel_limit: False
       terminate_when_close_to_torque_limit: False
       ball_ground_height: 0.12
-      ball_max_height: 2.0
-      ball_max_dist_to_base: 2.5
 
     termination_scales:
       termination_gravity_x: 0.8
@@ -73,7 +59,7 @@ env:
       termination_close_to_dof_vel_limit: 0.98
       termination_close_to_torque_limit: 0.98
 
-log_task_name: hitball
+log_task_name: ball_control
 
 eval_overrides:
   env:
