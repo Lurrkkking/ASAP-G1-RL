@@ -17,6 +17,8 @@ class HitBallResetMixin:
         self.post_contact_ball_max_height[env_ids] = 0.0
         self.success_buf[env_ids] = False
         self.upward_vel_in_range[env_ids] = False
+        self.ball_reset_debug_steps_left[env_ids] = self.ball_reset_debug_num_steps
+        self.ball_reset_debug_reported[env_ids] = False
         if self.hitball_motion_prior_enabled:
             self._reset_hitball_motion_phase_clock(env_ids)
 
@@ -27,6 +29,7 @@ class HitBallResetMixin:
             self.simulator.set_dof_state_tensor(env_ids, self.simulator.dof_state)
             self._refresh_sim_tensors()
             self._reset_ball_states(env_ids)
+            self.simulator.set_actor_root_state_tensor(env_ids, self.simulator.all_root_states)
             return
 
         self._reset_dofs(env_ids)
@@ -35,6 +38,7 @@ class HitBallResetMixin:
         self.simulator.set_dof_state_tensor(env_ids, self.simulator.dof_state)
         self._refresh_sim_tensors()
         self._reset_ball_states(env_ids)
+        self.simulator.set_actor_root_state_tensor(env_ids, self.simulator.all_root_states)
 
     def _reset_dofs(self, env_ids, target_state=None):
         if target_state is not None:
@@ -84,11 +88,6 @@ class HitBallResetMixin:
             torch_rand_float(-1.0, 1.0, (len(env_ids), 3), device=str(self.device))
             * self.ball_init_pos_noise.unsqueeze(0)
         )
-        lin_vel_noise = (
-            torch_rand_float(-1.0, 1.0, (len(env_ids), 3), device=str(self.device))
-            * self.ball_init_lin_vel_noise.unsqueeze(0)
-        )
-
         right_foot_reset_anchor = (
             self.simulator.robot_root_states[env_ids, 0:3]
             + self.reset_pose_right_foot_offset.unsqueeze(0)
@@ -98,5 +97,5 @@ class HitBallResetMixin:
         )
         self.ball_root_states[env_ids, 3:7] = 0.0
         self.ball_root_states[env_ids, 6] = 1.0
-        self.ball_root_states[env_ids, 7:10] = self.ball_init_lin_vel.unsqueeze(0) + lin_vel_noise
+        self.ball_root_states[env_ids, 7:10] = 0.0
         self.ball_root_states[env_ids, 10:13] = 0.0

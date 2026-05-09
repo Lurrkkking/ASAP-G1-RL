@@ -1,10 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-EXP_NAME="${1:-BallControl_G1}"
+EXP_NAME="${1:-BallControl_G1_ground}"
 NUM_ENVS="${2:-1024}"
 NUM_STEPS_PER_ENV="${3:-24}"
 NUM_LEARNING_ITERATIONS="${4:-1000000}"
+TERMINATE_ON_BALL_GROUND="${5:-false}"
 
 export PATH="/root/miniconda3/envs/rl/bin:${PATH}"
 
@@ -15,6 +16,7 @@ echo "experiment_name: ${EXP_NAME}"
 echo "num_envs: ${NUM_ENVS}"
 echo "num_steps_per_env: ${NUM_STEPS_PER_ENV}"
 echo "num_learning_iterations: ${NUM_LEARNING_ITERATIONS}"
+echo "terminate_on_ball_ground: ${TERMINATE_ON_BALL_GROUND}"
 echo "====================================================="
 
 HYDRA_FULL_ERROR=1 /root/miniconda3/envs/rl/bin/python humanoidverse/train_agent.py \
@@ -33,6 +35,7 @@ HYDRA_FULL_ERROR=1 /root/miniconda3/envs/rl/bin/python humanoidverse/train_agent
   use_wandb=False \
   checkpoint=null \
   auto_load_latest=False \
+  env.config.termination.terminate_on_ball_ground="${TERMINATE_ON_BALL_GROUND}" \
   ++algo.config.learn_sigma=False \
   algo.config.init_noise_std=0.8 \
   algo.config.num_steps_per_env="${NUM_STEPS_PER_ENV}" \

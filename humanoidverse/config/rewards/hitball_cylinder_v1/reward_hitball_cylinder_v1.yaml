@@ -1,0 +1,73 @@
+# @package _global_
+
+rewards:
+  set_reward: hitball_cylinder_v1
+  set_reward_date: 20260507
+  only_positive_rewards: False
+
+  reward_scales:
+    zone_reward: 4.0
+    return_progress_reward: 1.0
+    valid_kick_reward: 120.0
+    pre_impact_foot_to_ball_reward: 0.0
+    phase_wait_stability_reward: 0.5
+    phase_prepare_foot_to_ball_reward: 1.0
+    phase_recover_stability_reward: 0.5
+    carry_penalty: -10.0
+    non_target_contact_penalty: -50.0
+    base_drift_penalty: -3.0
+    style_prior: 0.0
+    penalty_torques: -0.0002
+    penalty_dof_vel: -0.0002
+    penalty_action_rate: -0.3
+    termination: -100.0
+
+  zone_reward_weight: [8.0, 4.0, 4.0]
+  zone_sticky_disable_steps: 5
+  zone_sticky_scale: 0.1
+  pre_impact_pos_sigma: 0.05
+  pre_impact_vel_norm: 1.0
+  style_prior_sigma: 0.25
+
+  reward_limit:
+    soft_dof_pos_limit: 0.95
+    soft_dof_vel_limit: 0.95
+    soft_torque_limit: 0.90
+
+    reward_limits_curriculum:
+      soft_dof_pos_curriculum: False
+      soft_dof_pos_initial_limit: 1.15
+      soft_dof_pos_max_limit: 1.15
+      soft_dof_pos_min_limit: 0.95
+      soft_dof_pos_curriculum_degree: 0.00000025
+      soft_dof_pos_curriculum_level_down_threshold: 40
+      soft_dof_pos_curriculum_level_up_threshold: 42
+
+      soft_dof_vel_curriculum: False
+      soft_dof_vel_initial_limit: 1.15
+      soft_dof_vel_max_limit: 1.15
+      soft_dof_vel_min_limit: 0.95
+      soft_dof_vel_curriculum_degree: 0.00000025
+      soft_dof_vel_curriculum_level_down_threshold: 40
+      soft_dof_vel_curriculum_level_up_threshold: 42
+
+      soft_torque_curriculum: False
+      soft_torque_initial_limit: 1.10
+      soft_torque_max_limit: 1.10
+      soft_torque_min_limit: 0.85
+      soft_torque_curriculum_degree: 0.00000025
+      soft_torque_curriculum_level_down_threshold: 40
+      soft_torque_curriculum_level_up_threshold: 42
+
+  reward_penalty_curriculum: False
+  reward_initial_penalty_scale: 1.0
+  reward_min_penalty_scale: 0.0
+  reward_max_penalty_scale: 1.0
+  reward_penalty_level_down_threshold: 100
+  reward_penalty_level_up_threshold: 200
+  reward_penalty_degree: 0.00001
+  num_compute_average_epl: 10000
+  reward_penalty_reward_names: [
+    "penalty_action_rate",
+    "non_target_contact_penalty"
+  ]

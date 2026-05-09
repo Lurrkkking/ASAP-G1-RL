@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+  - /algo: ppo
+  - /simulator: isaacgym_hitball
+  - /env: hitball_cylinder_v1
+  - /obs: hitball_cylinder_v1/hitball_cylinder_obs
+  - /rewards: hitball_cylinder_v1/reward_hitball_cylinder_v1
+
+experiment_name: TEST_HitBallCylinderV1

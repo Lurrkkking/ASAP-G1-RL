@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-CKPT="/root/autodl-tmp/ASAP/logs/TEST_KickPrimitive/20260422_145357-MotionTracking_KickPrimitive_RightHitBall-motion_tracking-g1_29dof_anneal_23dof/model_3700_hitball99_warmstart.pt"
-EXP_NAME="HitBall_G1_SingleHit_Motion3700_0.48_0.0_0.75m"
+CKPT="/root/autodl-tmp/ASAP/logs/TEST_KickPrimitive/20260424_151051-MotionTracking_KickPrimitive_RightHitBall_anklefixed-motion_tracking-g1_29dof_anneal_23dof/model_4900_hitball_warmstart.pt"
+EXP_NAME="HitBall_G1_SingleHit_Motion4900_AnkleFixed"
 
 export PATH="/root/miniconda3/envs/rl/bin:${PATH}"
 

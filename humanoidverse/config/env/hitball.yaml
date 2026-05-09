@@ -40,8 +40,17 @@ env:
     prep_root_lin_vel_noise: [0.03, 0.03, 0.02]
     prep_root_ang_vel_noise: [0.03, 0.03, 0.03]
     prep_dof_pos_noise_scale: 0.03
+    prep_dof_pos:
+      left_shoulder_pitch_joint: -0.30
+      left_shoulder_roll_joint: 0.28
+      left_shoulder_yaw_joint: 0.00
+      left_elbow_joint: 0.35
+      right_shoulder_pitch_joint: -0.30
+      right_shoulder_roll_joint: -0.28
+      right_shoulder_yaw_joint: 0.00
+      right_elbow_joint: 0.35
 
-    ball_init_offset: [0.48, 0.0, 0.75]  # 原0.35 -0.03 1.0
+    ball_init_offset: [0.50, -0.08, 0.79]  # 原0.35 -0.03 1.0
     ball_init_pos_noise: [0.005, 0.005, 0.005]
     ball_init_lin_vel: [0.0, 0.0, 0.0]
     ball_init_lin_vel_noise: [0.0, 0.0, 0.0]

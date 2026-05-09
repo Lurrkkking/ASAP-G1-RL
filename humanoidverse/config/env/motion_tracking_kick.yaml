@@ -51,6 +51,7 @@ env:
 
     use_teleop_control: False
     enforce_randomize_motion_start_eval: False
+    randomize_motion_start_train: False
 
 log_task_name: motion_tracking
 

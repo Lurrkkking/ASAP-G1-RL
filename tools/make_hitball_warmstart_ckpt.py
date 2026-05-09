@@ -158,7 +158,7 @@ def print_list(title, values):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Create a hitball warm-start checkpoint from a motion-tracking checkpoint by "
+            "Create a hitball-style warm-start checkpoint from a motion-tracking checkpoint by "
             "adapting only actor/critic first input layers and loading shape-compatible layers."
         )
     )
@@ -172,10 +172,24 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--shared-actor-cols", type=int, default=75)
     parser.add_argument("--shared-critic-cols", type=int, default=78)
-    parser.add_argument("--hitball-task-cols", type=int, default=24)
+    parser.add_argument(
+        "--task-cols",
+        type=int,
+        default=24,
+        help="Task-specific observation columns appended after the shared motion-tracking prefix.",
+    )
+    parser.add_argument(
+        "--hitball-task-cols",
+        type=int,
+        default=None,
+        help="Deprecated alias for --task-cols.",
+    )
     parser.add_argument("--new-input-init-std", type=float, default=0.0)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    if args.hitball_task_cols is not None:
+        args.task_cols = args.hitball_task_cols
 
     source = load_checkpoint(args.source)
     output = copy.deepcopy(load_checkpoint(args.target)) if args.target is not None else copy.deepcopy(source)
@@ -196,20 +210,24 @@ def main():
         resize_first_layer_in_state(
             out_actor,
             actor_first,
-            args.shared_actor_cols + args.hitball_task_cols,
+            args.shared_actor_cols + args.task_cols,
         )
         resize_first_layer_in_state(
             out_critic,
             critic_first,
-            args.shared_critic_cols + args.hitball_task_cols,
+            args.shared_critic_cols + args.task_cols,
         )
 
-    print("Assumed hitball actor obs layout:")
-    print("  [base_ang_vel(3), projected_gravity(3), dof_pos(23), dof_vel(23), actions(23), hitball_task(24)]")
-    print("  shared_actor_prefix_cols=75, hitball_task_cols=24")
-    print("Assumed hitball critic obs layout:")
-    print("  [base_lin_vel(3), base_ang_vel(3), projected_gravity(3), dof_pos(23), dof_vel(23), actions(23), hitball_task(24)]")
-    print("  shared_critic_prefix_cols=78, hitball_task_cols=24")
+    print("Assumed actor obs layout:")
+    print(
+        f"  [base_ang_vel(3), projected_gravity(3), dof_pos(23), dof_vel(23), actions(23), task({args.task_cols})]"
+    )
+    print(f"  shared_actor_prefix_cols={args.shared_actor_cols}, task_cols={args.task_cols}")
+    print("Assumed critic obs layout:")
+    print(
+        f"  [base_lin_vel(3), base_ang_vel(3), projected_gravity(3), dof_pos(23), dof_vel(23), actions(23), task({args.task_cols})]"
+    )
+    print(f"  shared_critic_prefix_cols={args.shared_critic_cols}, task_cols={args.task_cols}")
     print(f"source={args.source}")
     print(f"target={args.target}")
     print(f"output={args.output}")
@@ -221,7 +239,7 @@ def main():
         tgt_state=out_actor,
         first_weight_name=actor_first,
         shared_cols=args.shared_actor_cols,
-        task_cols=args.hitball_task_cols,
+        task_cols=args.task_cols,
         new_input_init_std=args.new_input_init_std,
         label="actor",
     )
@@ -230,7 +248,7 @@ def main():
         tgt_state=out_critic,
         first_weight_name=critic_first,
         shared_cols=args.shared_critic_cols,
-        task_cols=args.hitball_task_cols,
+        task_cols=args.task_cols,
         new_input_init_std=args.new_input_init_std,
         label="critic",
     )
@@ -247,7 +265,7 @@ def main():
         "warmstart_target": str(args.target),
         "shared_actor_cols": args.shared_actor_cols,
         "shared_critic_cols": args.shared_critic_cols,
-        "hitball_task_cols": args.hitball_task_cols,
+        "task_cols": args.task_cols,
         "new_input_init_std": args.new_input_init_std,
         "note": "Optimizer states removed; train with ++algo.config.load_optimizer=False.",
     }

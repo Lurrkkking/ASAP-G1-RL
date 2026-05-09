@@ -59,7 +59,7 @@ obs:
     - dof_pos: ${robot.dof_obs_size}
     - dof_vel: ${robot.dof_obs_size}
     - actions: ${robot.actions_dim}
-    - ball_control_task: 16
+    - ball_control_task: 24
 
   add_noise_currculum: False
   noise_initial_value: 0.05

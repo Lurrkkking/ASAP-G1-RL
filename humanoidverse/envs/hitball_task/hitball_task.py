@@ -1,5 +1,7 @@
 from isaacgym import gymapi
 import torch
+from loguru import logger
+from omegaconf import DictConfig
 
 from humanoidverse.envs.legged_base_task.legged_robot_base import LeggedRobotBase
 from humanoidverse.envs.hitball_task.hitball_logging import HitBallLoggingMixin
@@ -192,11 +194,23 @@ class HitBallTask(
             self.simulator._rigid_body_pos[:, self.right_foot_body_idx]
             - self.simulator.robot_root_states[:, 0:3]
         ).mean(dim=0)
+        # Reset anomaly logging is a diagnostic aid; keep it opt-in to avoid
+        # flooding training logs in normal runs.
+        self.ball_reset_debug_num_steps = int(getattr(self.config, "ball_reset_debug_num_steps", 0))
+        self.ball_reset_debug_xy_speed_threshold = float(
+            getattr(self.config, "ball_reset_debug_xy_speed_threshold", 0.05)
+        )
+        self.ball_reset_debug_steps_left = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self.ball_reset_debug_reported = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
 
         self.prep_dof_pos = self.default_dof_pos.clone()
         prep_pose_override = getattr(self.config, "prep_dof_pos", None)
         if prep_pose_override is not None:
-            if isinstance(prep_pose_override, dict):
+            if isinstance(prep_pose_override, (dict, DictConfig)):
                 for name, value in prep_pose_override.items():
                     self.prep_dof_pos[0, self.dof_names.index(name)] = float(value)
             else:
@@ -230,6 +244,7 @@ class HitBallTask(
         self.episode_length_buf += 1
         self._update_counters_each_step()
         self.last_episode_length_buf = self.episode_length_buf.clone()
+        self._debug_ball_reset_horizontal_velocity()
 
         self._pre_compute_observations_callback()
         self._update_tasks_callback()
@@ -265,6 +280,38 @@ class HitBallTask(
             self._setup_simulator_next_task()
             if self.debug_viz:
                 self._draw_debug_vis()
+
+    def _debug_ball_reset_horizontal_velocity(self):
+        active_mask = self.ball_reset_debug_steps_left > 0
+        if not torch.any(active_mask):
+            return
+
+        robot_body_pos = self.simulator._rigid_body_pos[:, : self.num_bodies]
+        body_dist_to_ball = torch.norm(robot_body_pos - self.ball_pos.unsqueeze(1), dim=-1)
+        min_body_dist, min_body_id = torch.min(body_dist_to_ball, dim=1)
+        ball_xy_speed = torch.norm(self.ball_lin_vel[:, :2], dim=-1)
+        anomalous_mask = (
+            active_mask
+            & (~self.ball_reset_debug_reported)
+            & (ball_xy_speed > self.ball_reset_debug_xy_speed_threshold)
+        )
+        anomalous_envs = anomalous_mask.nonzero(as_tuple=False).flatten()
+        for env_id in anomalous_envs.tolist():
+            body_id = int(min_body_id[env_id].item())
+            logger.warning(
+                "HitBall ball reset anomaly env={} ep_step={} ball_pos={} ball_lin_vel={} xy_speed={:.4f} "
+                "closest_body={} dist={:.4f} ball_contact_force={:.4f}",
+                env_id,
+                int(self.episode_length_buf[env_id].item()),
+                [float(x) for x in self.ball_pos[env_id].detach().cpu().tolist()],
+                [float(x) for x in self.ball_lin_vel[env_id].detach().cpu().tolist()],
+                float(ball_xy_speed[env_id].item()),
+                self.body_names[body_id],
+                float(min_body_dist[env_id].item()),
+                float(torch.norm(self.simulator.contact_forces[env_id, self.ball_body_env_idx]).item()),
+            )
+        self.ball_reset_debug_reported[anomalous_mask] = True
+        self.ball_reset_debug_steps_left[active_mask] -= 1
 
     def _get_obs_hitball_task(self):
         base_pos = self.simulator.robot_root_states[:, 0:3]

@@ -1,0 +1,131 @@
+# @package _global_
+
+defaults:
+  - legged_base
+
+env:
+  _target_: humanoidverse.envs.hitball_cylinder_v1.hitball_cylinder_v1.HitBallCylinderV1
+  _recursive_: False
+  config:
+    robot: ${robot}
+    domain_rand: ${domain_rand}
+    rewards: ${rewards}
+    terrain: ${terrain}
+    obs: ${obs}
+    env_spacing: 5.0
+    max_episode_length_s: 1.5
+
+    normalization:
+      clip_actions: 100.0
+      clip_observations: 100.0
+
+    target_contact_body: ${robot.right_foot_name}
+    target_foot_local_offset: [0.12, 0.0, -0.02]
+    target_contact_candidate_bodies: null
+
+    prediction_horizons: [0.25, 0.35, 0.55]
+    prediction_gravity_z: -9.81
+
+    control_zone_center: [0.38, 0.0, 0.75]
+    control_zone_radius: 0.22
+    control_zone_z_range: [0.55, 1.15]
+
+    strike_gate_horizon_index: 1
+    strike_window: [[0.20, 0.55], [-0.10, 0.10], [0.02, 0.28]]
+    impact_window: [[0.00, 0.26], [-0.13, 0.13], [0.00, 0.32]]
+    strike_gate_vz_max: -0.05
+    strike_cooldown_steps: 8
+    max_contact_steps: 5
+    prepare_min_steps: 3
+    prepare_max_steps: 18
+    strike_max_steps: 10
+    recover_min_steps: 10
+    phase_gravity_xy_max: 0.45
+    phase_root_height_min: 0.55
+    phase_base_vel_xy_max: 1.0
+
+    near_foot_thresh: 0.16
+    carry_rel_speed_thresh: 0.35
+    carry_foot_up_thresh: 0.20
+    carry_ball_up_thresh: 0.15
+    max_near_foot_steps: 8
+
+    release_dist_thresh: 0.08
+    release_rel_speed_thresh: 0.45
+    release_vz_min: 0.25
+    release_vz_max: 3.5
+    release_horizontal_speed_max: 2.0
+    release_toward_zone_speed_min: -0.05
+
+    contact_force_threshold: 0.5
+    ball_contact_force_threshold: 0.5
+    contact_dist_threshold: 0.18
+    ball_contact_min_height: 0.12
+    debug_print_non_target_ball_contact: false
+    debug_print_ball_contact_nearest_bodies: false
+    debug_print_non_target_ball_contact_topk: 3
+    debug_non_target_ball_contact_dist_thresh: 0.27
+
+    ball_init_offset: [0.40, 0.0, -0.2] # 相对机器人[0.0, 0.0, 0.8]
+    ball_init_pos_noise: [0.02, 0.01, 0.02]
+    ball_init_lin_vel: [0.0, 0.0, 0.0]
+    ball_init_lin_vel_noise: [0.0, 0.0, 0.0]
+    ball_init_pos: [0.0, 0.0, 1.0]
+    ball_init_rot: [0.0, 0.0, 0.0, 1.0]
+
+    ball:
+      radius: 0.10
+      mass: 0.43
+      friction: 0.8
+      restitution: 0.45
+      linear_damping: 0.01
+      angular_damping: 0.01
+
+    termination:
+      terminate_by_contact: False
+      terminate_by_gravity: True
+      terminate_by_low_height: False
+      terminate_when_close_to_dof_pos_limit: False
+      terminate_when_close_to_dof_vel_limit: False
+      terminate_when_close_to_torque_limit: False
+      ball_ground_height: 0.12
+      ball_max_dist_to_base: 2.0
+
+    termination_scales:
+      termination_gravity_x: 0.8
+      termination_gravity_y: 0.8
+      termination_min_base_height: 0.3
+      termination_close_to_dof_pos_limit: 0.98
+      termination_close_to_dof_vel_limit: 0.98
+      termination_close_to_torque_limit: 0.98
+
+    assisted_kick:
+      enable: false
+      alpha_start: 0.60
+      alpha_end: 0.0
+      decay_steps: 500000
+      lift_steps: 4
+      swing_steps: 5
+      recover_steps: 4
+      lift_pose:
+        right_hip_pitch_joint: -0.55
+        right_hip_roll_joint: -0.03
+        right_hip_yaw_joint: 0.02
+        right_knee_joint: 0.70
+        right_ankle_pitch_joint: -0.40
+        right_ankle_roll_joint: 0.0
+      swing_pose:
+        right_hip_pitch_joint: -0.15
+        right_hip_roll_joint: -0.02
+        right_hip_yaw_joint: 0.02
+        right_knee_joint: 0.18
+        right_ankle_pitch_joint: -0.10
+        right_ankle_roll_joint: 0.0
+      recover_pose: {}
+
+log_task_name: hitball_cylinder_v1
+
+eval_overrides:
+  env:
+    config:
+      max_episode_length_s: 2.0

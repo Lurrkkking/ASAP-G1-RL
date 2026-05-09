@@ -19,15 +19,21 @@ env:
       clip_actions: 100.0
       clip_observations: 100.0
 
-    control_target_center: [0.45, 0.0, 0.90]
-    control_touch_window_steps: 8
-    control_touch_vz_trigger_max: 0.0
+    control_target_center: [0.35, 0.0, 0.70]
+    control_touch_window_steps: 16
+    control_touch_vz_trigger_max: 0.2 # 0.0
     target_contact_body: ${robot.right_foot_name}
-    contact_force_threshold: 1.0
-    ball_contact_force_threshold: 1.0
+    contact_force_threshold: 0.5  # 1.0
+    ball_contact_force_threshold: 0.5   # 1.0
     contact_dist_threshold: 0.18
     ball_contact_min_height: 0.12
-    ball_init_offset: [0.35, 0.0, 0.75]
+    valid_stance_base_height_min: 0.55
+    valid_stance_roll_pitch_max: 0.50
+    valid_stance_nonfoot_contact_check: False
+    nonfoot_contact_force_threshold: 1.0
+    right_toe_local_offset: [0.12, 0.0, -0.02]
+    left_toe_local_offset: [0.12, 0.0, -0.02]
+    ball_init_offset: [0.30, -0.15, 0.40]
     ball_init_pos_noise: [0.005, 0.005, 0.005]
     ball_init_lin_vel: [0.0, 0.0, 0.0]
     ball_init_lin_vel_noise: [0.0, 0.0, 0.0]
@@ -43,6 +49,7 @@ env:
       angular_damping: 0.01
 
     termination:
+      terminate_on_ball_ground: False
       terminate_by_contact: False
       terminate_by_gravity: True
       terminate_by_low_height: False

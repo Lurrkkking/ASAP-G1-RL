@@ -1,0 +1,7 @@
+# @package _global_
+
+defaults:
+  - isaacgym
+
+simulator:
+  _target_: humanoidverse.simulator.isaacgym.isaacgym_hitball.IsaacGym
