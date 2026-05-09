@@ -1,147 +1,151 @@
-# ASAP-G1-Learning: G1 机器人强化学习与 Sim2Sim 实验记录
+<p align="right">
+  <b>English</b> | <a href="README_CN.md">中文</a>
+</p>
 
-本项目基于 [ASAP](https://github.com/LeCAR-Lab/ASAP) 框架，记录我在 **Unitree G1** 上进行动作模仿、强化学习、跨物理引擎验证以及足球控球任务探索的过程。
+# ASAP-G1-Learning: G1 Reinforcement Learning and Sim2Sim Experiments
 
-相比于简单堆功能，本项目更关注几件事：
+This project is built on top of [ASAP](https://github.com/LeCAR-Lab/ASAP). It records my experiments on **Unitree G1** motion imitation, reinforcement learning, cross-physics-engine validation, and football juggling / ball-control task design.
 
-- 复杂人体动作在 G1 上的模仿训练
-- Isaac Gym → Genesis / MuJoCo 的 Sim2Sim 验证
-- 奖励、终止条件、控制参数对策略行为的影响
-- 面向足球击球 / 颠球任务的 RL 环境构建与任务重构
-- 面向动力学差异的小幅残差补偿实验
+Rather than simply adding more features, this project focuses on several core questions:
 
-> 原 ASAP 官方说明已保留为 `README_ORIGIN.md`，环境配置和基础使用方法可参考原文件。
+- Imitating complex human motions on G1
+- Sim2Sim validation from Isaac Gym to Genesis / MuJoCo
+- How rewards, termination conditions, and control parameters affect learned behaviors
+- Building and redesigning RL environments for football kickup / juggling tasks
+- Small residual-action compensation for physics mismatch
+
+> The original ASAP documentation is kept as `README_ORIGIN.md`. Please refer to it for basic installation and usage instructions.
 
 ---
 
-## 结果展示
+## Results
 
-### 1. C罗 Siuuu 动作模仿
+### 1. CR7 Siuuu Motion Imitation
 
-在 0.85 电机力矩软限位和域随机化条件下，G1 可以完成较完整的动作链：**助跑 → 起跳转身 → 空中挥臂 → 落地**。
+With a 0.85 motor torque soft limit and domain randomization, G1 can complete a relatively full motion sequence: **run-up → jump and turn → arm swing in the air → landing**.
 
-| Isaac Gym（训练环境） | Genesis（验证环境） |
+| Isaac Gym (training) | Genesis (validation) |
 | :---: | :---: |
 | <img src="media/CR7_Issacgym.gif" width="400"> | <img src="media/CR7_Genesis.gif" width="400"> |
 
-### 2. 崎岖地形自适应
+### 2. Rough Terrain Adaptation
 
-在 Isaac Gym 中训练基础行走策略后，将策略零样本迁移到 Genesis 崎岖地面测试。早期模型容易被障碍绊倒，后续通过奖励调整提升了抬腿积极性和过障稳定性。
+After training a basic walking policy in Isaac Gym, the policy was tested zero-shot on rough terrain in Genesis. The early policy often tripped over obstacles; later reward adjustments improved leg lifting and terrain-crossing stability.
 
-| 优化前（频繁摔倒） | 优化后（稳定跨越） |
+| Before optimization | After optimization |
 | :---: | :---: |
 | <img src="media/Walk_fall.gif" width="400"> | <img src="media/Walk_Genesis.gif" width="400"> |
 
-### 3. G1 足球颠球任务（进行中）
+### 3. G1 Football Juggling Task (Ongoing)
 
-这是目前最主要的任务线。目标不是简单让机器人“踢到球”，而是逐步训练出一种更可持续的控球能力：
+This is the current main task line. The goal is not merely to make the robot touch the ball, but to gradually train a more sustainable ball-control behavior:
 
-> 当球偏离人体前方可控区域时，机器人通过一次触球修正，把球重新送回可控区域。
+> When the ball leaves the controllable region in front of the robot, the robot should use a corrective touch to send it back into that region.
 
-当前已经完成：
+Current progress:
 
-- `robot + ball` 最小仿真链路
-- 基于 Isaac Gym tensor 的球状态、接触检测和调试日志
-- single-hit / kickup 版本环境与奖励
-- 能将球踢起的初步策略
-- 去掉过硬落地终止后，策略能更稳定地把球控制到目标高度附近
-- 部分 rollout 中已出现二次摆腿尝试，说明策略开始出现连续修正的早期迹象
+- Built the minimal `robot + ball` simulation pipeline
+- Added ball state, contact detection, and debug logs based on Isaac Gym tensors
+- Implemented the initial single-hit / kickup environment and rewards
+- Trained early policies that can kick the ball upward
+- After removing overly hard ground-contact termination, the policy can control the ball closer to the target height
+- Some rollouts already show second swing attempts, which suggests early signs of continuous correction behavior
 
-| 控制到目标高度附近，但姿态丑陋 | 虽丑陋但出现二次摆腿尝试 |
+| Ball reaches a reasonable height, but the posture is still unnatural | A second swing attempt appears, despite poor style |
 | :---: | :---: |
 | <img src="media/ball_kickup_stable.gif" width="400"> | <img src="media/second_swing_attempt.gif" width="400"> |
 
-目前主要问题：
+Main issues at this stage:
 
-- 第一脚虽然能把球踢起，但动作仍然不自然
-- 第一脚后的身体姿态和支撑状态不利于第二次发力
-- 球落地立即终止会诱导策略把球踢得过高
-- 后续需要把“能踢起来”进一步变成“踢完还能回到下一拍准备姿态”
+- The first kick can lift the ball, but the motion is still unnatural
+- The body posture and support state after the first kick are not suitable for a second kick
+- Immediate termination when the ball touches the ground encourages the policy to kick the ball too high
+- The next step is to turn “can kick the ball up” into “can kick the ball up and return to a ready pose for the next touch”
 
-因此当前路线更偏向先训练一个可用的 **kickup / recovery primitive**，再逐步加入可续性、控高、控方向和动作风格约束，而不是一开始直接追求完整连续颠球。并且目前暂未考虑sim2sim可行性与真实机器人足部颠球的物理可行性，目前仅期望在训练环境完成基本的颠球目标。
+The current direction is therefore to first train a usable **kickup / recovery primitive**, and then gradually add continuability, height control, direction control, and motion-style constraints. At this stage, I am not yet evaluating Sim2Sim feasibility or the real-world physical feasibility of foot juggling on the actual robot. The current objective is only to make the basic juggling behavior work in the training environment.
 
 ---
 
-## 主要技术工作
+## Main Technical Work
 
-### 动作模仿与奖励调整
+### Motion Imitation and Reward Tuning
 
-围绕 G1 的高动态动作模仿，主要做了以下实验：
+For high-dynamic motion imitation on G1, I mainly worked on the following aspects:
 
-- 引入 `soft_torque_curriculum`，早期放宽力矩帮助探索起跳动作，后期逐步收回到 0.85 力矩软限位。
-- 针对“单脚赖地”的局部最优，调整跌倒惩罚和脚部跟踪奖励，使模型更愿意真正双脚离地。
-- 增大 `penalty_action_rate`，抑制起跳和落地时的手臂、关节高频乱抖。
-- 加入 `penalty_feet_ori`，约束落地脚掌姿态，降低落地失稳概率。
-- 使用高噪声断点续训，在已有策略基础上重新提高探索强度，改善动作发僵和起跳不足的问题。
+- Introduced `soft_torque_curriculum`: the torque limit is relaxed early to help the policy explore jumping, then gradually reduced back to the 0.85 soft torque limit.
+- Addressed the “single-foot sticking to the ground” local optimum by adjusting fall penalties and foot-tracking rewards, encouraging real double-foot takeoff.
+- Increased `penalty_action_rate` to suppress high-frequency arm and joint oscillations during takeoff and landing.
+- Added `penalty_feet_ori` to encourage flatter and more stable foot orientation during landing.
+- Used high-noise checkpoint continuation to increase exploration again from an existing policy, improving motion stiffness and insufficient jump height.
 
-### Sim2Sim 验证链路
+### Sim2Sim Validation Pipeline
 
-为了检查策略是否只是在 Isaac Gym 中“过拟合仿真器”，补齐了跨引擎测试流程：
+To check whether the policy was merely overfitting Isaac Gym, I completed several cross-engine testing components:
 
-- 新增 `humanoidverse/export_pt_to_onnx.py`，支持将策略导出为 ONNX。
-- 搭建 `genesis_simulation/`，支持在 Genesis 中加载 ONNX 策略测试。
-- 对比 Isaac Gym 与 Genesis 中的起跳高度、稳定性和落地行为，发现接触、阻尼和积分差异会显著影响高动态动作。
-- 重新启用域随机化后，Genesis 中的动作稳定性明显改善。
-- 补齐 MuJoCo ONNX 推理流程，并对齐控制频率、动作滤波和目标限速等参数。
+- Added `humanoidverse/export_pt_to_onnx.py` to export trained policies to ONNX.
+- Built `genesis_simulation/` to load and test ONNX policies in Genesis.
+- Compared jump height, stability, and landing behavior between Isaac Gym and Genesis, revealing that contact, damping, and integration differences strongly affect high-dynamic motions.
+- Re-enabled domain randomization, which significantly improved stability in Genesis.
+- Completed the MuJoCo ONNX inference pipeline and aligned key parameters such as control frequency, action filtering, and target-rate limits.
 
-### 足球任务环境与任务重构
+### Football Task Environment and Task Redesign
 
-足球任务最初采用 single-hit 设计，即机器人准备、摆腿、触球，然后根据触球后球的高度打分。这个版本能跑通基本链路，但逐渐暴露出问题：
+The football task initially used a single-hit design: the robot prepares, swings its leg, touches the ball, and receives a score based on the post-contact ball height. This version was useful for building the basic pipeline, but several problems became clear:
 
-- 容易把任务写成“一次性击球得分”
-- reward 越补越碎，语义不够统一
-- 策略容易学到勾脚硬挑、斜飞、踢过高等代理解
-- 第一脚成功后，身体姿态往往无法自然衔接第二脚
+- The task was easily reduced to a one-shot kick scoring problem
+- The reward became fragmented as more patches were added
+- The policy tended to exploit proxy solutions such as toe-hooking, sideways kicks, or kicking the ball too high
+- After a successful first kick, the body posture often failed to transition naturally into a second kick
 
-因此后续将任务重新抽象为“前方控球区维持”：
+The task was therefore reframed as **maintaining the ball inside a controllable region in front of the robot**:
 
-- 球处于人体前方目标状态区时，主要奖励维持稳定
-- 球离开目标状态区并进入下落趋势时，触发修正需求
-- 触球的目标不是单纯把球踢高，而是把球送回一个可持续控制的区域
-- 后续重点从“是否踢到球”转向“触球质量、出球轨迹、踢后恢复姿态和下一拍可续性”
+- When the ball is inside the target state region, the policy is rewarded for maintaining it there
+- When the ball leaves the region and starts falling, a corrective touch is needed
+- The purpose of contact is not simply to kick the ball higher, but to send it back into a sustainable control region
+- The focus shifts from “whether the robot touches the ball” to contact quality, outgoing ball trajectory, post-kick recovery, and continuability for the next touch
 
-当前更可行的中间目标是：
+The current intermediate objective is:
 
-> 先把单次 kickup 变成稳定的 recovery primitive：球低了能踢起来，球不要飞太偏，人踢完还能回到下一次发力的准备状态。
+> Turn a single kickup into a stable recovery primitive: when the ball gets too low, the robot can kick it up, avoid large horizontal drift, and return to a ready state for the next touch.
 
-### 残差补丁实验（简述）
+### Residual Patch Experiments (Brief)
 
-残差部分主要用于研究 Isaac Gym 策略迁移到 Genesis 后的动力学差异补偿。核心问题是：
+The residual patch experiments study physics mismatch compensation when transferring an Isaac Gym policy to Genesis. The core question is:
 
-> 当同一个动作在两个物理引擎中产生不同状态转移时，能不能给原策略外挂一个小幅动作补丁，减小 Sim2Sim gap？
+> If the same action produces different state transitions in two physics engines, can a small action patch reduce the Sim2Sim gap?
 
-早期尝试过直接用 PPO 学 residual，但样本效率低，且容易出现高频抖动和保守代偿。后续改为先计算局部 oracle residual：
+Early attempts used PPO to learn the residual directly, but sample efficiency was poor and the policy often produced high-frequency oscillation or conservative compensation. Later, I switched to computing a local oracle residual first:
 
 $$
 \Delta a^* = (J^\top W J + \lambda I)^{-1} J^\top W r
 $$
 
-再将其蒸馏成小网络，并加入 lower-body masking、deadzone 和幅值限制。
+The oracle residual was then distilled into a small network with lower-body masking, deadzone filtering, and amplitude limits.
 
-当前结论比较明确：
+Current conclusions:
 
-- residual patch 在 one-step gap 上确实有效，清理混杂因素后曾将误差从约 `2.02` 降到 `1.81`。
-- 但闭环执行中，高 `K_p` 会放大补丁抖动，容易导致力矩尖峰和不自然动作。
-- 因此 residual 更适合做**小幅、低频、保守的局部微调**，而不是承担大幅动作重规划。
-- 这条线目前作为 Sim2Sim 动力学补偿实验保留，但不再作为足球颠球任务的主线。
-
----
-
-## 当前重点
-
-接下来主要集中在足球控球任务，优先级如下：
-
-- [ ] 保留能起球的 kickup 方向，先稳定单次 recovery primitive。
-- [ ] 将球落地立即终止改为更温和的 soft penalty / delayed termination，避免策略过度踢高。
-- [ ] 加入第一脚后的 recoverability 指标：躯干稳定、支撑稳定、摆腿回收、下一拍 ready pose。
-- [ ] 统计二次摆腿时的球-脚最近距离，判断是时机问题、轨迹问题还是观测问题。
-- [ ] 增加球相对脚的局部几何观测，减少盲目摆腿。
-- [ ] 在功能稳定后，再逐步加入 motion prior / weak tracking 作为动作风格约束。
-- [ ] 继续完善 Genesis / MuJoCo 的 Sim2Sim 测试，评估策略是否具有跨引擎泛化能力。
+- The residual patch is effective for one-step gap reduction. After removing confounding factors, the error was reduced from about `2.02` to `1.81`.
+- In closed-loop execution, high `K_p` can amplify residual jitter, causing torque spikes and unnatural motion.
+- Residual actions are therefore more suitable for **small, low-frequency, conservative local correction**, not large-scale motion replanning.
+- This line is kept as a Sim2Sim dynamics-compensation experiment, but it is no longer the main route for the football juggling task.
 
 ---
 
-## 致谢
+## Current Focus
 
-感谢 [ASAP](https://github.com/LeCAR-Lab/ASAP) 团队开源的具身智能训练框架。  
-本项目主要用于个人在强化学习、机器人控制和跨物理引擎验证方面的学习与实验。
+The next stage mainly focuses on the football control task:
+
+- [ ] Keep the kickup direction and stabilize the single recovery primitive first.
+- [ ] Replace immediate ground-contact termination with softer penalty / delayed termination to avoid over-kicking.
+- [ ] Add recoverability metrics after the first kick: torso stability, support stability, swing-leg recovery, and next-touch ready pose.
+- [ ] Measure the minimum ball-foot distance during second swing attempts to identify whether the problem is timing, trajectory, or observation.
+- [ ] Add local ball-relative-to-foot observations to reduce blind leg swinging.
+- [ ] After functional behavior becomes stable, gradually add motion prior / weak tracking as a style constraint.
+- [ ] Continue improving Genesis / MuJoCo Sim2Sim testing to evaluate cross-engine generalization.
+
+---
+
+## Acknowledgements
+
+Thanks to the [ASAP](https://github.com/LeCAR-Lab/ASAP) team for open-sourcing a strong embodied intelligence training framework.  
+This project is mainly for my personal learning and experiments in reinforcement learning, robot control, and cross-physics-engine validation.
