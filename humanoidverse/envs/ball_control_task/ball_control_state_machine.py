@@ -5,10 +5,13 @@ class BallControlStateMachineMixin:
     def _init_ball_control_state_machine(self):
         self.task_mode = str(getattr(self.config, "task_mode", "ball_control")).lower()
         self.is_kickup_task_mode = self.task_mode == "kickup"
+        rewards_cfg = getattr(self.config, "rewards", self.config)
         self.control_touch_window_steps = int(getattr(self.config, "control_touch_window_steps", 40))
         self.reposition_contact_ignore_steps = int(
             getattr(self.config, "reposition_contact_ignore_steps", 4)
         )
+        self.recover_start_steps = int(getattr(rewards_cfg, "recover_start_steps", 5))
+        self.recover_end_steps = int(getattr(rewards_cfg, "recover_end_steps", 40))
         self.control_touch_vz_trigger_max = float(
             getattr(self.config, "control_touch_vz_trigger_max", 0.0)
         )
@@ -92,6 +95,18 @@ class BallControlStateMachineMixin:
             self.num_envs, dtype=torch.bool, device=self.device
         )
         self.kickup_ready_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.has_recent_valid_contact = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.time_since_last_target_contact = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self.pre_touch_reposition_mask = torch.ones(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.post_touch_recover_mask = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
 
     def _reset_ball_control_state_machine(self, env_ids):
         if len(env_ids) == 0:
@@ -106,6 +121,10 @@ class BallControlStateMachineMixin:
         self.entered_target_state_zone_since_contact[env_ids] = False
         self.missed_target_state_cycle_buf[env_ids] = False
         self.kickup_ready_mask[env_ids] = False
+        self.has_recent_valid_contact[env_ids] = False
+        self.time_since_last_target_contact[env_ids] = 0
+        self.pre_touch_reposition_mask[env_ids] = True
+        self.post_touch_recover_mask[env_ids] = False
 
     def _update_ball_control_state_machine(self):
         self._get_valid_stance_mask()
@@ -122,6 +141,12 @@ class BallControlStateMachineMixin:
         target_contact = self._get_target_contact_mask()
         self.just_target_contact[target_contact] = True
         self.has_target_contact |= target_contact
+        active_recent_contact = self.has_recent_valid_contact & (~target_contact)
+        self.time_since_last_target_contact[active_recent_contact] += 1
+        self.has_recent_valid_contact[target_contact] = True
+        self.time_since_last_target_contact[target_contact] = 0
+        expired_recent_contact = self.time_since_last_target_contact >= self.recover_end_steps
+        self.has_recent_valid_contact[expired_recent_contact] = False
         wrong_body_contact = self._get_wrong_body_contact_mask() & (~target_contact)
         self.just_wrong_body_contact[wrong_body_contact] = True
         self.entered_target_state_zone_since_contact |= (
@@ -181,6 +206,15 @@ class BallControlStateMachineMixin:
             & (self.reposition_contact_ignore_buf == 0)
         )
         self.just_reposition_contact_violation[reposition_contact_violation] = True
+
+        in_reposition_now = self.control_mode == self.REPOSITION
+        self.post_touch_recover_mask[:] = (
+            in_reposition_now
+            & self.has_recent_valid_contact
+            & (self.time_since_last_target_contact > self.recover_start_steps)
+            & (self.time_since_last_target_contact < self.recover_end_steps)
+        )
+        self.pre_touch_reposition_mask[:] = in_reposition_now & (~self.post_touch_recover_mask)
 
     def _get_kickup_ready_mask(self):
         ball_rel_base = self._get_ball_rel_base_heading()
@@ -251,3 +285,15 @@ class BallControlStateMachineMixin:
         )
         self.log_dict["ball_control/wrong_body_contact_rate"] = self.just_wrong_body_contact.float().mean()
         self.log_dict["ball_control/kickup_ready_rate"] = self.kickup_ready_mask.float().mean()
+        self.log_dict["ball_control/post_touch_recover_ratio"] = (
+            self.post_touch_recover_mask.float().mean()
+        )
+        self.log_dict["ball_control/pre_touch_reposition_ratio"] = (
+            self.pre_touch_reposition_mask.float().mean()
+        )
+        recent_count = self.has_recent_valid_contact.float().sum().clamp(min=1.0)
+        self.log_dict["ball_control/time_since_last_target_contact_mean"] = torch.where(
+            self.has_recent_valid_contact,
+            self.time_since_last_target_contact.float(),
+            torch.zeros_like(self.time_since_last_target_contact, dtype=torch.float),
+        ).sum() / recent_count

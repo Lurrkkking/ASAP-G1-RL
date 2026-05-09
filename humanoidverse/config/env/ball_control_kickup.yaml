@@ -20,7 +20,7 @@ env:
     kickoff_y_range: [-0.28, 0.28]
 
     termination:
-      enable_ball_ground_termination: True
+      enable_ball_ground_termination: false
       terminate_by_low_height: True
 
     termination_scales:

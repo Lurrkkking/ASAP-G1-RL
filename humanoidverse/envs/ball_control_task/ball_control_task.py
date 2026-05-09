@@ -272,9 +272,13 @@ class BallControlTask(
             "wrong_body_contact": self.just_wrong_body_contact.clone(),
             "term_reason": self.term_reason.clone(),
             "has_target_contact": self.has_target_contact.clone(),
+            "has_recent_valid_contact": self.has_recent_valid_contact.clone(),
+            "time_since_last_target_contact": self.time_since_last_target_contact.clone(),
             "post_contact_steps": self.post_contact_steps.clone(),
             "post_contact_max_height": self.post_contact_max_height.clone(),
             "post_contact_max_vz": self.post_contact_max_vz.clone(),
+            "pre_touch_reposition": self.pre_touch_reposition_mask.clone(),
+            "post_touch_recover": self.post_touch_recover_mask.clone(),
             "entered_target_state_zone_since_contact": (
                 self.entered_target_state_zone_since_contact.clone()
             ),

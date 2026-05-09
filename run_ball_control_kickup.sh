@@ -5,7 +5,7 @@ EXP_NAME="${1:-BallControlKickup_G1}"
 NUM_ENVS="${2:-1024}"
 NUM_STEPS_PER_ENV="${3:-24}"
 NUM_LEARNING_ITERATIONS="${4:-1000000}"
-CHECKPOINT="${5:-/root/autodl-tmp/ASAP/logs/TEST_BallControlKickup/20260508_175154-BallControlKickup_G1-ball_control-g1_29dof_anneal_23dof/model_3000.pt}"
+CHECKPOINT="${5:-/root/autodl-tmp/ASAP/logs/TEST_BallControlKickup/20260509_163800-BallControlKickup_G1-ball_control-g1_29dof_anneal_23dof/model_1600.pt}"
 
 export PATH="/root/miniconda3/envs/rl/bin:${PATH}"
 

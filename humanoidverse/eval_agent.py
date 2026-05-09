@@ -75,7 +75,8 @@ def main(override_config: OmegaConf):
 
     # Get log level from LOGURU_LEVEL environment variable or use INFO as default
     console_log_level = os.environ.get("LOGURU_LEVEL", "INFO").upper()
-    logger.add(sys.stdout, level=console_log_level, colorize=True)
+    # Keep console logs off stdout so Rich progress bars can redraw cleanly.
+    logger.add(sys.stderr, level=console_log_level, colorize=True)
 
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger().addHandler(HydraLoggerBridge())

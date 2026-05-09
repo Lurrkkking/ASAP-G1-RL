@@ -675,14 +675,12 @@ class PPO(BaseAlgo):
                 logger.info(f"eval_steps not set; fallback to auto_record_num_frames={eval_steps}")
 
         if eval_steps > 0:
-            log_interval = max(1, eval_steps // 20)
             for step in track(range(eval_steps), description="Evaluating policy"):
                 actor_state["step"] = step
                 actor_state = self._pre_eval_env_step(actor_state)
                 actor_state = self.env_step(actor_state)
                 actor_state = self._post_eval_env_step(actor_state)
-                if step == 0 or (step + 1) % log_interval == 0 or (step + 1) == eval_steps:
-                    logger.info(f"Eval progress: {step + 1}/{eval_steps}")
+            logger.info(f"Eval progress: {eval_steps}/{eval_steps}")
         else:
             logger.info("Evaluating policy without step limit; set algo.config.eval_steps to show progress.")
             step = 0

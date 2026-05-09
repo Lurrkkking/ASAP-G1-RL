@@ -17,6 +17,7 @@ rewards:
     # 二、冲激式正奖励：只在事件发生瞬间给
     # =========================
     control_touch_contact_bonus: 1.0   # CONTROL_TOUCH 阶段发生正确右脚触球时给奖励
+    post_contact_recover_reward: 0.0
     # =========================
     # 三、冲激式惩罚：只在违规事件发生瞬间扣
     # =========================
@@ -43,6 +44,7 @@ rewards:
 
   reposition_zone_reward_target: [0.35, -0.08, 0.75]    # 补位目标点
   reposition_zone_reward_weight: [4.0, 4.0, 2.0]     # x/y/z 三个方向的偏离惩罚
+  recover_reposition_zone_scale: 0.0
   control_zone_x_range: [0.25, 0.45]      # 目标状态区
   control_zone_y_range: [-0.25, 0.25]
   control_zone_z_range: [0.45, 1.00]
@@ -62,6 +64,43 @@ rewards:
   # =========================
   invalid_stance_penalty: 5.0     # invalid_stance 每步固定惩罚值
   ball_horizontal_vel_penalty: 20.0
+  recover_start_steps: 5
+  recover_end_steps: 40
+  post_contact_recover_reward_scale: 0.0
+  recover_base_upright_scale: 1.0
+  recover_base_height_scale: 0.5
+  recover_base_vel_scale: 0.4
+  recover_dof_ready_scale: 0.8
+  recover_foot_ready_scale: 0.0
+  recover_ball_body_dist_scale: 0.0
+  recover_ball_body_dist_k: 30.0
+  recover_ball_body_dist_min: 0.30
+  recover_ball_body_dist_max: 0.50
+  recover_ball_front_x_min: 0.10
+  recover_joint_weights:
+    left_hip_pitch_joint: 1.4
+    left_hip_roll_joint: 1.4
+    left_hip_yaw_joint: 1.2
+    left_knee_joint: 1.4
+    left_ankle_pitch_joint: 1.0
+    left_ankle_roll_joint: 1.0
+    right_hip_pitch_joint: 0.9
+    right_hip_roll_joint: 0.9
+    right_hip_yaw_joint: 0.8
+    right_knee_joint: 0.9
+    right_ankle_pitch_joint: 0.3
+    right_ankle_roll_joint: 0.3
+    waist_yaw_joint: 1.3
+    waist_roll_joint: 1.5
+    waist_pitch_joint: 1.5
+    left_shoulder_pitch_joint: 0.7
+    left_shoulder_roll_joint: 0.7
+    left_shoulder_yaw_joint: 0.6
+    left_elbow_joint: 0.5
+    right_shoulder_pitch_joint: 0.7
+    right_shoulder_roll_joint: 0.7
+    right_shoulder_yaw_joint: 0.6
+    right_elbow_joint: 0.5
 
   reward_limit:
     soft_dof_pos_limit: 0.95
