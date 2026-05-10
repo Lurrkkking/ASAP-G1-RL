@@ -68,7 +68,7 @@ The current direction is therefore to first train a usable **kickup / recovery p
 
 I also built a preliminary G1 football juggling environment based on humanoidverse / IsaacGym. The task is still exploratory and has not achieved stable continuous juggling, but the project includes robot-ball simulation, contact approximation, reward design, motion prior attempts, and failure analysis.
 
-See detailed notes: [Technical Summary](docs/G1_football_juggling_technical_summary.md)
+See detailed notes: [Technical Summary](docs/football_juggling_summary.md)
 ---
 
 ## Main Technical Work
