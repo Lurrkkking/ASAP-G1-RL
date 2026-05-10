@@ -12,41 +12,6 @@ class BallControlStateMachineMixin:
         )
         self.recover_start_steps = int(getattr(rewards_cfg, "recover_start_steps", 5))
         self.recover_end_steps = int(getattr(rewards_cfg, "recover_end_steps", 40))
-        self.enable_knee_driven_valid_kick_gate = bool(
-            getattr(rewards_cfg, "enable_knee_driven_valid_kick_gate", False)
-        )
-        self.max_valid_contact_steps = int(
-            getattr(rewards_cfg, "max_valid_contact_steps", 2)
-        )
-        self.valid_kick_min_pre_contact_knee_ang_vel = float(
-            getattr(
-                rewards_cfg,
-                "valid_kick_min_pre_contact_knee_ang_vel",
-                getattr(rewards_cfg, "knee_ang_vel_reward_min", 1.2 * torch.pi),
-            )
-        )
-        self.valid_kick_min_foot_shank_angle_deg = float(
-            getattr(
-                rewards_cfg,
-                "valid_kick_min_foot_shank_angle_deg",
-                getattr(rewards_cfg, "foot_shank_angle_min_deg", 120.0),
-            )
-        )
-        self.valid_kick_carry_rel_speed_max = float(
-            getattr(rewards_cfg, "valid_kick_carry_rel_speed_max", 0.40)
-        )
-        self.valid_kick_carry_ball_vz_max = float(
-            getattr(rewards_cfg, "valid_kick_carry_ball_vz_max", 0.10)
-        )
-        self.valid_kick_carry_foot_vz_max = float(
-            getattr(rewards_cfg, "valid_kick_carry_foot_vz_max", 0.10)
-        )
-        self.valid_kick_ball_vz_delta_min = float(
-            getattr(rewards_cfg, "valid_kick_ball_vz_delta_min", 0.30)
-        )
-        self.valid_kick_confirm_steps = int(
-            getattr(rewards_cfg, "valid_kick_confirm_steps", 2)
-        )
         self.control_touch_vz_trigger_max = float(
             getattr(self.config, "control_touch_vz_trigger_max", 0.0)
         )
@@ -142,48 +107,6 @@ class BallControlStateMachineMixin:
         self.post_touch_recover_mask = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
-        self.prev_target_contact = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.contact_duration_steps = torch.zeros(
-            self.num_envs, dtype=torch.long, device=self.device
-        )
-        self.valid_kick_pending = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.just_valid_kick = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.has_valid_kick = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.valid_kick_confirm_age = torch.zeros(
-            self.num_envs, dtype=torch.long, device=self.device
-        )
-        self.valid_kick_pre_contact_knee_ang_vel = torch.zeros(
-            self.num_envs, dtype=torch.float, device=self.device
-        )
-        self.valid_kick_pre_contact_foot_shank_angle_deg = torch.zeros(
-            self.num_envs, dtype=torch.float, device=self.device
-        )
-        self.valid_kick_contact_start_ball_vz = torch.zeros(
-            self.num_envs, dtype=torch.float, device=self.device
-        )
-        self.valid_kick_contact_end_ball_vz = torch.zeros(
-            self.num_envs, dtype=torch.float, device=self.device
-        )
-        self.valid_kick_carry_contact = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.valid_kick_contact_too_long = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.valid_kick_preconditions_ok = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device
-        )
-        self.valid_kick_ball_vz_delta = torch.zeros(
-            self.num_envs, dtype=torch.float, device=self.device
-        )
 
     def _reset_ball_control_state_machine(self, env_ids):
         if len(env_ids) == 0:
@@ -202,42 +125,20 @@ class BallControlStateMachineMixin:
         self.time_since_last_target_contact[env_ids] = 0
         self.pre_touch_reposition_mask[env_ids] = True
         self.post_touch_recover_mask[env_ids] = False
-        self.prev_target_contact[env_ids] = False
-        self.contact_duration_steps[env_ids] = 0
-        self.valid_kick_pending[env_ids] = False
-        self.just_valid_kick[env_ids] = False
-        self.has_valid_kick[env_ids] = False
-        self.valid_kick_confirm_age[env_ids] = 0
-        self.valid_kick_pre_contact_knee_ang_vel[env_ids] = 0.0
-        self.valid_kick_pre_contact_foot_shank_angle_deg[env_ids] = 0.0
-        self.valid_kick_contact_start_ball_vz[env_ids] = 0.0
-        self.valid_kick_contact_end_ball_vz[env_ids] = 0.0
-        self.valid_kick_carry_contact[env_ids] = False
-        self.valid_kick_contact_too_long[env_ids] = False
-        self.valid_kick_preconditions_ok[env_ids] = False
-        self.valid_kick_ball_vz_delta[env_ids] = 0.0
-        if hasattr(self, "_update_knee_ang_vel_tracking"):
-            self._update_knee_ang_vel_tracking(env_ids)
 
     def _update_ball_control_state_machine(self):
         self._get_valid_stance_mask()
-        if hasattr(self, "_update_knee_ang_vel_tracking"):
-            self._update_knee_ang_vel_tracking()
         self.mode_step_buf += 1
         self.reposition_contact_ignore_buf[:] = torch.clamp_min(
             self.reposition_contact_ignore_buf - 1, 0
         )
         prev_control_mode = self.control_mode.clone()
-        prev_target_contact = self.prev_target_contact.clone()
         self.just_target_contact[:] = False
         self.just_wrong_body_contact[:] = False
         self.just_reposition_contact_violation[:] = False
         self.just_started_control_touch[:] = False
         self.missed_target_state_cycle_buf[:] = False
-        self.just_valid_kick[:] = False
         target_contact = self._get_target_contact_mask()
-        contact_start = target_contact & (~prev_target_contact)
-        contact_end = (~target_contact) & prev_target_contact
         self.just_target_contact[target_contact] = True
         self.has_target_contact |= target_contact
         active_recent_contact = self.has_recent_valid_contact & (~target_contact)
@@ -263,78 +164,6 @@ class BallControlStateMachineMixin:
             self.post_contact_max_vz[active_post_contact],
             self.ball_lin_vel[active_post_contact, 2],
         )
-        self.contact_duration_steps[target_contact] += 1
-        self.contact_duration_steps[contact_start] = 1
-        self.contact_duration_steps[~target_contact] = 0
-
-        if self.enable_knee_driven_valid_kick_gate:
-            if torch.any(contact_start):
-                foot_shank_angle_deg, _, _ = self._compute_foot_shank_angle_deg()
-                self.valid_kick_pre_contact_knee_ang_vel[contact_start] = (
-                    self.current_knee_ang_vel_value[contact_start]
-                )
-                self.valid_kick_pre_contact_foot_shank_angle_deg[contact_start] = (
-                    foot_shank_angle_deg[contact_start]
-                )
-                self.valid_kick_contact_start_ball_vz[contact_start] = self.ball_lin_vel[
-                    contact_start, 2
-                ]
-                self.valid_kick_carry_contact[contact_start] = False
-                self.valid_kick_contact_too_long[contact_start] = False
-                self.valid_kick_preconditions_ok[contact_start] = False
-                self.valid_kick_ball_vz_delta[contact_start] = 0.0
-
-            if torch.any(target_contact):
-                right_toe_pos, right_toe_vel = self._get_right_toe_state()
-                foot_ball_rel_vel = self.ball_lin_vel - right_toe_vel
-                foot_ball_rel_speed = torch.norm(foot_ball_rel_vel, dim=-1)
-                carry_now = (
-                    target_contact
-                    & (foot_ball_rel_speed <= self.valid_kick_carry_rel_speed_max)
-                    & (self.ball_lin_vel[:, 2] <= self.valid_kick_carry_ball_vz_max)
-                    & (right_toe_vel[:, 2] <= self.valid_kick_carry_foot_vz_max)
-                )
-                self.valid_kick_carry_contact |= carry_now
-                self.valid_kick_contact_too_long |= (
-                    target_contact
-                    & (self.contact_duration_steps > self.max_valid_contact_steps)
-                )
-
-            if torch.any(contact_end):
-                preconditions_ok = (
-                    (self.valid_kick_pre_contact_knee_ang_vel >= self.valid_kick_min_pre_contact_knee_ang_vel)
-                    & (
-                        self.valid_kick_pre_contact_foot_shank_angle_deg
-                        >= self.valid_kick_min_foot_shank_angle_deg
-                    )
-                    & (~self.valid_kick_carry_contact)
-                    & (~self.valid_kick_contact_too_long)
-                )
-                self.valid_kick_preconditions_ok[contact_end] = preconditions_ok[contact_end]
-                self.valid_kick_contact_end_ball_vz[contact_end] = self.ball_lin_vel[contact_end, 2]
-                self.valid_kick_pending[contact_end] = preconditions_ok[contact_end]
-                self.valid_kick_confirm_age[contact_end] = 0
-
-            pending_mask = self.valid_kick_pending.clone()
-            if torch.any(pending_mask):
-                self.valid_kick_confirm_age[pending_mask] += 1
-                self.valid_kick_ball_vz_delta[pending_mask] = (
-                    self.ball_lin_vel[pending_mask, 2]
-                    - self.valid_kick_contact_end_ball_vz[pending_mask]
-                )
-                confirmed = pending_mask & (
-                    self.valid_kick_ball_vz_delta >= self.valid_kick_ball_vz_delta_min
-                )
-                expired = pending_mask & (
-                    self.valid_kick_confirm_age >= self.valid_kick_confirm_steps
-                )
-                self.just_valid_kick[confirmed] = True
-                self.has_valid_kick |= confirmed
-                clear_mask = confirmed | expired
-                self.valid_kick_pending[clear_mask] = False
-                self.valid_kick_confirm_age[clear_mask] = 0
-        else:
-            self.has_valid_kick = self.has_target_contact.clone()
 
         in_reposition = self.control_mode == self.REPOSITION
         if self.is_kickup_task_mode:
@@ -367,9 +196,6 @@ class BallControlStateMachineMixin:
         self.mode_step_buf[start_touch] = 0
         self.just_started_control_touch[start_touch] = True
         self.has_target_contact[start_touch] = False
-        self.has_valid_kick[start_touch] = False
-        self.valid_kick_pending[start_touch] = False
-        self.valid_kick_confirm_age[start_touch] = 0
         self.post_contact_steps[start_touch] = 0
         self.post_contact_max_height[start_touch] = 0.0
         self.post_contact_max_vz[start_touch] = 0.0
@@ -389,7 +215,6 @@ class BallControlStateMachineMixin:
             & (self.time_since_last_target_contact < self.recover_end_steps)
         )
         self.pre_touch_reposition_mask[:] = in_reposition_now & (~self.post_touch_recover_mask)
-        self.prev_target_contact[:] = target_contact
 
     def _get_kickup_ready_mask(self):
         ball_rel_base = self._get_ball_rel_base_heading()
@@ -460,24 +285,6 @@ class BallControlStateMachineMixin:
         )
         self.log_dict["ball_control/wrong_body_contact_rate"] = self.just_wrong_body_contact.float().mean()
         self.log_dict["ball_control/kickup_ready_rate"] = self.kickup_ready_mask.float().mean()
-        self.log_dict["ball_control/valid_kick_rate"] = self.just_valid_kick.float().mean()
-        self.log_dict["ball_control/has_valid_kick_rate"] = self.has_valid_kick.float().mean()
-        self.log_dict["ball_control/valid_kick_pending_rate"] = self.valid_kick_pending.float().mean()
-        self.log_dict["ball_control/valid_kick_pre_knee_ang_vel"] = (
-            self.valid_kick_pre_contact_knee_ang_vel.mean()
-        )
-        self.log_dict["ball_control/valid_kick_pre_foot_shank_angle_deg"] = (
-            self.valid_kick_pre_contact_foot_shank_angle_deg.mean()
-        )
-        self.log_dict["ball_control/valid_kick_ball_vz_delta"] = (
-            self.valid_kick_ball_vz_delta.mean()
-        )
-        self.log_dict["ball_control/carry_contact_rate"] = (
-            self.valid_kick_carry_contact.float().mean()
-        )
-        self.log_dict["ball_control/contact_too_long_rate"] = (
-            self.valid_kick_contact_too_long.float().mean()
-        )
         self.log_dict["ball_control/post_touch_recover_ratio"] = (
             self.post_touch_recover_mask.float().mean()
         )

@@ -64,6 +64,11 @@ Main issues at this stage:
 
 The current direction is therefore to first train a usable **kickup / recovery primitive**, and then gradually add continuability, height control, direction control, and motion-style constraints. At this stage, I am not yet evaluating Sim2Sim feasibility or the real-world physical feasibility of foot juggling on the actual robot. The current objective is only to make the basic juggling behavior work in the training environment.
 
+### G1 Football Juggling Exploration
+
+I also built a preliminary G1 football juggling environment based on humanoidverse / IsaacGym. The task is still exploratory and has not achieved stable continuous juggling, but the project includes robot-ball simulation, contact approximation, reward design, motion prior attempts, and failure analysis.
+
+See detailed notes: [Technical Summary](docs/G1_football_juggling_technical_summary.md)
 ---
 
 ## Main Technical Work

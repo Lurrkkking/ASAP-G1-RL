@@ -1,5 +1,5 @@
 # @package _global_
-# 加入了膝盖摆腿，但未测试，copy到autodl-tmp/ASAP/humanoidverse/config/rewards/ball_control/reward_ball_control_kickup_knee.yaml这里进行测试，不污染现有yaml
+
 rewards:
   set_reward: ball_control_kickup
   set_reward_date: 20260424
@@ -10,11 +10,11 @@ rewards:
     ball_in_target_state_zone_reward: 4.0
     control_touch_foot_to_ball_reward: 10.0
     control_touch_contact_bonus: 1.0
-    foot_shank_angle_reward: 30.0
-    knee_ang_vel_range_reward: 0
-    leg_alignment_reward: 7.0
-    post_contact_upward_vel_reward: 70.0
-    post_contact_height_reward: 90.0    
+    foot_shank_angle_reward: 10.0
+    knee_ang_vel_range_reward: 30.0
+    leg_alignment_reward: 15.0
+    post_contact_upward_vel_reward: 120.0 # 70
+    post_contact_height_reward: 80.0  # 90 
     post_contact_recover_reward: 1.0
     reposition_contact_violation_penalty: -1.0
     wrong_body_contact_penalty: -1.0
@@ -24,7 +24,7 @@ rewards:
     ball_overshoot_penalty: -5.0 # 原0.2左右的水平，过小；5.0太大，直接落地上
     termination: -120.0
     penalty_orientation: -0.5
-    penalty_torques: -0.003
+    penalty_torques: -0.0003
     penalty_dof_vel: -0.003
     penalty_action_rate: -0.4
 
@@ -36,11 +36,11 @@ rewards:
   control_zone_z_range: [0.50, 1.10]
   control_zone_vz_min: -10.0
 
-  control_touch_contact_bonus: 350.0
+  control_touch_contact_bonus: 2000.0
   foot_shank_angle_k: 0.01
   foot_shank_angle_min_deg: 120.0
   foot_shank_angle_control_touch_mult: 1.0
-  foot_shank_angle_kickup_delay_steps: 2
+  foot_shank_angle_kickup_delay_steps: 8
   foot_shank_angle_post_contact_window_steps: 4
   foot_shank_angle_reposition_mult: 0.0
   foot_shank_angle_recover_mult: 0.0
@@ -53,6 +53,15 @@ rewards:
   knee_ang_vel_reward_k: 1.0
   knee_ang_vel_reward_direction_scale: -1.0
   knee_ang_vel_reward_use_abs: False
+  enable_knee_driven_valid_kick_gate: False
+  max_valid_contact_steps: 2
+  valid_kick_min_pre_contact_knee_ang_vel: 3.7699111843077517
+  valid_kick_min_foot_shank_angle_deg: 120.0
+  valid_kick_carry_rel_speed_max: 0.40
+  valid_kick_carry_ball_vz_max: 0.10
+  valid_kick_carry_foot_vz_max: 0.10
+  valid_kick_ball_vz_delta_min: 0.30
+  valid_kick_confirm_steps: 2
   leg_alignment_k: 30.0
   leg_alignment_inner_limit_deg: 10.0
   leg_alignment_outer_limit_deg: 20.0
@@ -61,9 +70,9 @@ rewards:
   leg_alignment_control_touch_mult: 0.4
   leg_alignment_contact_mult: 0.2
   leg_alignment_left_scale: 3.0
-  leg_alignment_right_scale: 8.0
+  leg_alignment_right_scale: 20.0
   wrong_body_contact_penalty: 120.0
-  reposition_contact_violation_penalty: 20.0
+  reposition_contact_violation_penalty: 100.0
   missed_target_state_cycle_penalty: 0.0
   invalid_stance_penalty: 10.0
   ball_horizontal_vel_penalty: 200.0

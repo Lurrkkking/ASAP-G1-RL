@@ -5,9 +5,7 @@ EXP_NAME="${1:-BallControlKickup_G1}"
 NUM_ENVS="${2:-1024}"
 NUM_STEPS_PER_ENV="${3:-24}"
 NUM_LEARNING_ITERATIONS="${4:-1000000}"
-CHECKPOINT="${5:-/root/autodl-tmp/ASAP/logs/TEST_BallControlKickup/20260509_163800-BallControlKickup_G1-ball_control-g1_29dof_anneal_23dof/model_1600.pt}"
-
-export PATH="/root/miniconda3/envs/rl/bin:${PATH}"
+CHECKPOINT="${5:-/root/autodl-tmp/ASAP/logs/TEST_BallControlKickup_New_2/20260510_170119-BallControlKickup_G1-ball_control-g1_29dof_anneal_23dof/model_800.pt}"
 
 echo "====================================================="
 echo "启动 G1 ball control kickup 训练"
@@ -29,15 +27,16 @@ HYDRA_FULL_ERROR=1 /root/miniconda3/envs/rl/bin/python humanoidverse/train_agent
   ++robot.asset.self_collisions=0 \
   +terrain=terrain_locomotion_plane \
   +domain_rand=NO_domain_rand \
-  +rewards=ball_control/reward_ball_control_kickup \
+  +rewards=ball_control/reward_ball_control_kickup_knee \
   +obs=ball_control/ball_control_obs \
-  project_name=TEST_BallControlKickup \
+  project_name=TEST_BallControlKickup_New_2 \
   experiment_name="${EXP_NAME}" \
   num_envs="${NUM_ENVS}" \
   headless=True \
   use_wandb=False \
   checkpoint="${CHECKPOINT}" \
   auto_load_latest=False \
+  ++algo.config.load_optimizer=False \
   ++algo.config.learn_sigma=False \
   algo.config.init_noise_std=0.8 \
   algo.config.num_steps_per_env="${NUM_STEPS_PER_ENV}" \

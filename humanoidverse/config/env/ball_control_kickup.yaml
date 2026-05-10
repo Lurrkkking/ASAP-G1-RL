@@ -11,12 +11,12 @@ env:
     valid_stance_roll_pitch_max: 0.35
     valid_stance_nonfoot_contact_check: True
     nonfoot_contact_force_threshold: 0.5
-    ball_init_offset: [0.40, 0.0, 0.6]
+    ball_init_offset: [0.60, 0.0, 0.6]
     ball_init_pos_noise: [0.015, 0.015, 0.01]
     ball_init_lin_vel: [0.0, 0.0, 0.0]
     ball_init_lin_vel_noise: [0.0, 0.0, 0.0]
     kickoff_ball_z_max: 0.8
-    kickoff_x_range: [0.12, 0.50]
+    kickoff_x_range: [0.12, 0.85]
     kickoff_y_range: [-0.28, 0.28]
 
     termination:
@@ -25,5 +25,13 @@ env:
 
     termination_scales:
       termination_min_base_height: 0.45
-      termination_gravity_x: 0.65
-      termination_gravity_y: 0.65
+      termination_gravity_x: 0.85
+      termination_gravity_y: 0.85
+      
+    ball:
+        radius: 0.10
+        mass: 0.28  # 酌情减小，因为g1实在是体量太小，0.43可能对于他来说确实重了
+        friction: 0.8
+        restitution: 0.45
+        linear_damping: 0.01
+        angular_damping: 0.01
