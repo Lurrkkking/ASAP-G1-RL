@@ -27,7 +27,6 @@ env:
     noise_to_initial_level: 0
 
     enforce_randomize_motion_start_eval: False
-    randomize_motion_start_train: False
     
 # Globally accessible parameters
 log_task_name: delta_a

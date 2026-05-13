@@ -19,7 +19,7 @@ xml_path: "g1_urdf/g1_29dof_anneal_23dof.xml"
  
 num_single_obs: 76
 simulation_dt: 0.005
-simulation_duration: 20.0
+simulation_duration: 4.33
 control_decimation: 4
 frame_stack: 4
 

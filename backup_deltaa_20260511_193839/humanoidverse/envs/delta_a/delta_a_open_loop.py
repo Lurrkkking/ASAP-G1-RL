@@ -24,13 +24,6 @@ import joblib
 
 from humanoidverse.envs.motion_tracking.motion_tracking import LeggedRobotMotionTracking
 
-
-def _to_list(x):
-    if torch.is_tensor(x):
-        return x.detach().cpu().numpy().tolist()
-    return np.asarray(x).tolist()
-
-
 class DeltaA_OpenLoop(LeggedRobotMotionTracking):
     def __init__(self, config, device):
         # import ipdb; ipdb.set_trace()
@@ -38,55 +31,6 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         self.delta_action_dof_heatmaps = torch.zeros((self.simulator.num_envs, self.num_dofs)).to(device)
         self.detla_action_percentage_heatmaps = torch.zeros((self.simulator.num_envs, self.num_dofs)).to(device)
         self.delta_action_cnt = 1
-        self._alignment_debug_print_count = 0
-
-    def _debug_print_action_alignment(self, motion_action_raw, motion_action_scaled):
-        if self._alignment_debug_print_count >= 5:
-            return
-
-        env_id = 0
-        motion_id = self.motion_ids[env_id : env_id + 1]
-        motion_time = (self.episode_length_buf[env_id : env_id + 1] + 1) * self.dt + self.motion_start_times[env_id : env_id + 1]
-        motion_len = self._motion_lib._motion_lengths[motion_id]
-        num_frames = self._motion_lib._motion_num_frames[motion_id]
-        motion_dt = self._motion_lib._motion_dt[motion_id]
-        frame_idx0, frame_idx1, blend = self._motion_lib._calc_frame_blend(motion_time, motion_len, num_frames, motion_dt)
-        f0l = frame_idx0 + self._motion_lib.length_starts[motion_id]
-        motion_state = self._motion_lib.get_motion_state(motion_id, motion_time, offset=self.env_origins[env_id : env_id + 1])
-
-        msg_parts = [
-            f"[DELTA_A_ALIGN] debug_idx={self._alignment_debug_print_count}",
-            f"common_step_counter={int(self.common_step_counter)}",
-            f"episode_length_buf0={int(self.episode_length_buf[env_id].item())}",
-            f"motion_id0={int(motion_id.item())}",
-            f"motion_time0={float(motion_time.item()):.6f}",
-            f"motion_start_time0={float(self.motion_start_times[env_id].item()):.6f}",
-            f"motion_len0={float(motion_len.item()):.6f}",
-            f"frame_idx0={int(frame_idx0.item())}",
-            f"frame_idx1={int(frame_idx1.item())}",
-            f"f0l={int(f0l.item())}",
-            f"blend={float(blend.item()):.6f}",
-            f"action_scale={float(self.config.robot.control.action_scale):.6f}",
-            f"action_clip_value={float(self.config.robot.control.action_clip_value):.6f}",
-            f"motion_action_loader[:8]={motion_action_raw[env_id, :8].detach().cpu().numpy().tolist()}",
-            f"motion_action_scaled[:8]={motion_action_scaled[env_id, :8].detach().cpu().numpy().tolist()}",
-            f"sim_dof_pos[:8]={self.simulator.dof_pos[env_id, :8].detach().cpu().numpy().tolist()}",
-            f"ref_dof_pos[:8]={motion_state['dof_pos'][env_id, :8].detach().cpu().numpy().tolist()}",
-            f"default_dof_pos[:8]={self.default_dof_pos[0, :8].detach().cpu().numpy().tolist()}",
-        ]
-
-        sampled_motion = self._motion_lib._motion_data_list[int(motion_id.item())]
-        if isinstance(sampled_motion, dict) and "action" in sampled_motion:
-            msg_parts.append(
-                f"pkl_action[frame_idx0,:8]={_to_list(sampled_motion['action'][int(frame_idx0.item()), :8])}"
-            )
-        if isinstance(sampled_motion, dict) and "dof" in sampled_motion:
-            msg_parts.append(
-                f"pkl_dof[frame_idx0,:8]={_to_list(sampled_motion['dof'][int(frame_idx0.item()), :8])}"
-            )
-
-        print(" ".join(msg_parts))
-        self._alignment_debug_print_count += 1
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.
@@ -106,17 +50,14 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         actions_scaled = actions * self.config.robot.control.action_scale
         control_type = self.config.robot.control.control_type
         if self.config['add_extra_action']:
-            motion_action_raw = self.get_open_loop_action_at_current_timestep()
+            motion_action = self.get_open_loop_action_at_current_timestep()
             # motion_action *= 0
             # print("motion_action", motion_action)
             # print("self.get_open_loop_action_at_current_timestep()", self.get_open_loop_action_at_current_timestep())
-            motion_action_scaled = motion_action_raw * self.config.robot.control.action_scale
+            motion_action *= self.config.robot.control.action_scale
         else:
             print("zeroing out motion_action") 
-            motion_action_raw = torch.zeros_like(actions)
-            motion_action_scaled = torch.zeros_like(actions_scaled)
-
-        self._debug_print_action_alignment(motion_action_raw, motion_action_scaled)
+            motion_action = torch.zeros_like(actions_scaled)
 
         if hasattr(self.config, 'anklePR'):
             if self.config.anklePR:
@@ -128,24 +69,8 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         # add action_to_delta_a_heatmap
         
         self.delta_action_dof_heatmaps = self.delta_action_dof_heatmaps * self.delta_action_cnt / (1+self.delta_action_cnt) + 1/(1+self.delta_action_cnt) * torch.abs(actions_scaled)
-        self.detla_action_percentage_heatmaps = self.detla_action_percentage_heatmaps * self.delta_action_cnt / (1+self.delta_action_cnt) + 1/(1+self.delta_action_cnt) *  torch.abs(actions_scaled / motion_action_scaled)
+        self.detla_action_percentage_heatmaps = self.detla_action_percentage_heatmaps * self.delta_action_cnt / (1+self.delta_action_cnt) + 1/(1+self.delta_action_cnt) *  torch.abs(actions_scaled / motion_action)
         self.delta_action_cnt += 1
-
-        ankle_delta_raw = self.actions[:, [4, 5, 10, 11]]
-        self.log_dict["delta_a/delta_action_raw_mean_abs"] = self.actions.detach().abs().mean()
-        self.log_dict["delta_a/delta_action_raw_max_abs"] = self.actions.detach().abs().max()
-        self.log_dict["delta_a/delta_action_raw_l2_mean"] = torch.norm(self.actions.detach(), dim=-1).mean()
-        self.log_dict["delta_a/delta_action_scaled_mean_abs"] = actions_scaled.detach().abs().mean()
-        self.log_dict["delta_a/delta_action_scaled_max_abs"] = actions_scaled.detach().abs().max()
-        self.log_dict["delta_a/motion_action_raw_mean_abs"] = motion_action_raw.detach().abs().mean()
-        self.log_dict["delta_a/motion_action_raw_max_abs"] = motion_action_raw.detach().abs().max()
-        self.log_dict["delta_a/motion_action_scaled_mean_abs"] = motion_action_scaled.detach().abs().mean()
-        self.log_dict["delta_a/motion_action_scaled_max_abs"] = motion_action_scaled.detach().abs().max()
-        self.log_dict["delta_a/delta_over_motion_scaled_mean"] = (
-            actions_scaled.detach().abs() / (motion_action_scaled.detach().abs() + 1e-6)
-        ).mean()
-        self.log_dict["delta_a/ankle_delta_raw_mean_abs"] = ankle_delta_raw.detach().abs().mean()
-        self.log_dict["delta_a/ankle_delta_raw_max_abs"] = ankle_delta_raw.detach().abs().max()
 
 
         print("self.delta_action_dof_heatmaps", self.delta_action_dof_heatmaps)
@@ -164,7 +89,7 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
 
         if control_type=="P":
             # torques = self._kp_scale * self.p_gains*(actions_scaled + self.default_dof_pos - self.simulator.dof_pos) - self._kd_scale * self.d_gains*self.simulator.dof_vel
-            torques = self._kp_scale * self.p_gains*(actions_scaled + motion_action_scaled + self.default_dof_pos - self.simulator.dof_pos) - self._kd_scale * self.d_gains*self.simulator.dof_vel
+            torques = self._kp_scale * self.p_gains*(actions_scaled + motion_action + self.default_dof_pos - self.simulator.dof_pos) - self._kd_scale * self.d_gains*self.simulator.dof_vel
         elif control_type=="V":
             torques = self._kp_scale * self.p_gains*(actions_scaled - self.simulator.dof_vel) - self._kd_scale * self.d_gains*(self.simulator.dof_vel - self.last_dof_vel)/self.sim_dt
         elif control_type=="T":

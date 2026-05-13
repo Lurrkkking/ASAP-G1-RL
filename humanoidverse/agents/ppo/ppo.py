@@ -230,6 +230,7 @@ class PPO(BaseAlgo):
         # for it in track(range(self.current_learning_iteration, tot_iter), description="Learning Iterations"):
         for it in range(self.current_learning_iteration, tot_iter):
             self.start_time = time.time()
+            self._debug_action_stats_iteration = it
 
             # Jiawei: Need to return obs_dict to update the obs_dict for the next iteration
             # Otherwise, we will keep using the initial obs_dict for the whole training process
@@ -304,6 +305,8 @@ class PPO(BaseAlgo):
 
     def _rollout_step(self, obs_dict):
         with torch.inference_mode():
+            debug_iter = getattr(self, "_debug_action_stats_iteration", self.current_learning_iteration)
+            should_log_action_debug = (debug_iter % 100 == 0)
             for i in range(self.num_steps_per_env):
                 # Compute the actions and values
                 # actions = self.actor.act(obs_dict["actor_obs"]).detach()
@@ -328,6 +331,21 @@ class PPO(BaseAlgo):
                 actor_state = {}
                 actor_state["actions"] = actions
                 obs_dict, rewards, dones, infos = self.env.step(actor_state)
+                if should_log_action_debug and i == 0:
+                    sampled_delta_action_mean_abs = actions.abs().mean().item()
+                    actor_mean_delta_action_mean_abs = policy_state_dict["action_mean"].abs().mean().item()
+                    actor_std = policy_state_dict["action_sigma"]
+                    actor_std_mean = actor_std.mean().item()
+                    actor_std_max = actor_std.max().item()
+                    env_actions_mean_abs = self.env.actions.abs().mean().item()
+                    logger.info(
+                        f"[deltaA action debug][iter {debug_iter}] "
+                        f"sampled_delta_action_mean_abs={sampled_delta_action_mean_abs:.6f} "
+                        f"actor_mean_delta_action_mean_abs={actor_mean_delta_action_mean_abs:.6f} "
+                        f"actor_std_mean={actor_std_mean:.6f} "
+                        f"actor_std_max={actor_std_max:.6f} "
+                        f"env_self_actions_mean_abs={env_actions_mean_abs:.6f}"
+                    )
                 # critic_obs = privileged_obs if privileged_obs is not None else obs
                 for obs_key in obs_dict.keys():
                     obs_dict[obs_key] = obs_dict[obs_key].to(self.device)

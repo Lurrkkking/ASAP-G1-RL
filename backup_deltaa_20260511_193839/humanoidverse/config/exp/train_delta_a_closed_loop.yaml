@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - /algo: ppo_train_delta_a
+  - /env: delta_a_closed_loop
+
+experiment_name: Use_Delta_A_for_Finetuning
+
+# Attention-Delta 动作空间：23(raw_delta_a) + 23(raw_alpha) = 46
+robot:
+  actions_dim: 46
+
+env:
+  config:
+    # 若不显式设置，代码会回退到 robot.control.action_scale
+    max_delta_scale: ${robot.control.action_scale}

@@ -52,6 +52,7 @@ env:
 
     use_teleop_control: False
     enforce_randomize_motion_start_eval: False
+    randomize_motion_start_train: True
 
 
 # Globally accessible parameters

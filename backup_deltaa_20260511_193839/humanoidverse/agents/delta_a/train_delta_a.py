@@ -44,117 +44,81 @@ class PPODeltaA(PPO):
         if config.policy_checkpoint is None:
             raise ValueError("algo.config.policy_checkpoint must be provided for PPODeltaA")
 
-        if config.policy_checkpoint is not None:
-            has_config = True
-            checkpoint = Path(config.policy_checkpoint)
-            config_path = checkpoint.parent / "config.yaml"
-            if not config_path.exists():
-                config_path = checkpoint.parent.parent / "config.yaml"
-                if not config_path.exists():
-                    has_config = False
-                    logger.error(f"Could not find config path: {config_path}")
+        checkpoint = Path(config.policy_checkpoint).absolute()
+        has_config = False
+        policy_config = None
 
-            if has_config:
-                logger.info(f"Loading training config file from {config_path}")
+        # 搜索路径：在本级或父级寻找 config.yaml
+        search_paths = [
+            checkpoint.parent / "config.yaml",
+            checkpoint.parent.parent / "config.yaml",
+        ]
+
+        for config_path in search_paths:
+            if config_path.exists():
+                logger.info(f"Loaded policy config from {config_path}")
                 with open(config_path) as file:
                     policy_config = OmegaConf.load(file)
+                has_config = True
+                break
 
-                if policy_config.eval_overrides is not None:
-                    policy_config = OmegaConf.merge(
-                        policy_config, policy_config.eval_overrides
-                    )
+        if not has_config:
+            raise FileNotFoundError(
+                f"Could not find config.yaml for policy checkpoint: {checkpoint}. "
+                f"Tried: {search_paths[0]} and {search_paths[1]}"
+            )
+
+        if policy_config.eval_overrides is not None:
+            policy_config = OmegaConf.merge(
+                policy_config, policy_config.eval_overrides
+            )
             
         pre_process_config(policy_config)
-        
+
+        # Attention-Delta 训练动作空间可扩展到 46，但闭环基策略 checkpoint 通常仍是 23 维。
+        # 这里临时切换 env.config.robot.actions_dim，确保 loaded_policy 的 actor 输出维度与 checkpoint 一致。
+        train_actions_dim = int(self.env.config.robot.actions_dim)
+        base_policy_actions_dim = int(policy_config.robot.actions_dim)
+        self.env.config.robot.actions_dim = base_policy_actions_dim
+
         self.loaded_policy: BaseAlgo = instantiate(policy_config.algo, env=env, device=device, log_dir=None)
         self.loaded_policy.algo_obs_dim_dict = policy_config.env.config.robot.algo_obs_dim_dict
         self.loaded_policy.setup()
 
         self.loaded_policy.load(config.policy_checkpoint)
 
+        # 恢复当前训练任务的动作维度（Attention-Delta: 46）
+        self.env.config.robot.actions_dim = train_actions_dim
+
         
         # import ipdb; ipdb.set_trace()
         self.loaded_policy._eval_mode()
-        self.loaded_policy.actor.eval()
-        self.loaded_policy.critic.eval()
-        self.loaded_policy.actor.requires_grad_(False)
-        self.loaded_policy.critic.requires_grad_(False)
+
+        for name, param in self.loaded_policy.actor.actor_module.module.named_parameters():
+            param.requires_grad = False
+            # print(f"Parameter name: {name}, Parameter: {param}, Requires Grad: {param.requires_grad}")
         
         # import ipdb; ipdb.set_trace()   
         self.loaded_policy.eval_policy = self.loaded_policy._get_inference_policy()
-        self._log_frozen_delta_freeze_debug_once()
+        
 
-    def _count_trainable_params(self, module):
-        return sum(param.numel() for param in module.parameters() if param.requires_grad)
+    def _get_loaded_policy_obs(self, obs_dict):
+        # Prefer obs key matching loaded policy input dim; fallback keeps backward compatibility.
+        try:
+            expected_in = int(self.loaded_policy.actor.actor_module.module[0].in_features)
+        except Exception:
+            expected_in = None
 
-    def _count_optimizer_params(self):
-        total = 0
-        optimizers = []
-        if hasattr(self, "actor_optimizer"):
-            optimizers.append(self.actor_optimizer)
-        if hasattr(self, "critic_optimizer"):
-            optimizers.append(self.critic_optimizer)
-        for optimizer in optimizers:
-            for group in optimizer.param_groups:
-                total += sum(param.numel() for param in group["params"])
-        return total
+        for key in ("closed_loop_actor_obs", "actor_obs"):
+            if key in obs_dict:
+                x = obs_dict[key]
+                if expected_in is None or int(x.shape[-1]) == expected_in:
+                    return x
 
-    def _count_main_policy_trainable_params(self):
-        if not hasattr(self, "actor") or not hasattr(self, "critic"):
-            return None
-        return (
-            self._count_trainable_params(self.actor)
-            + self._count_trainable_params(self.critic)
+        raise KeyError(
+            f"No compatible obs key for loaded_policy; expected_in={expected_in}, "
+            f"available={list(obs_dict.keys())}"
         )
-
-    def _format_debug_value(self, value):
-        return "NA" if value is None else str(value)
-
-    def _log_frozen_delta_freeze_debug_once(self):
-        loaded_policy_exists = hasattr(self, "loaded_policy") and self.loaded_policy is not None
-        loaded_actor_eval = loaded_policy_exists and hasattr(self.loaded_policy, "actor") and (not self.loaded_policy.actor.training)
-        loaded_critic_eval = loaded_policy_exists and hasattr(self.loaded_policy, "critic") and (not self.loaded_policy.critic.training)
-        delta_model_requires_grad_count = (
-            self._count_trainable_params(self.loaded_policy.actor)
-            + self._count_trainable_params(self.loaded_policy.critic)
-        )
-        loaded_policy_all_frozen = (delta_model_requires_grad_count == 0)
-        logger.info(
-            "[closed-loop freeze debug] "
-            f"loaded_policy_exists={loaded_policy_exists} "
-            f"loaded_policy_actor_eval={loaded_actor_eval} "
-            f"loaded_policy_critic_eval={loaded_critic_eval} "
-            f"loaded_policy_all_params_frozen={loaded_policy_all_frozen} "
-            f"delta_model_requires_grad_count={delta_model_requires_grad_count} "
-        )
-
-    def _log_closed_loop_action_debug(self, debug_iter, actions, policy_output):
-        clip_action_limit = float(self.env.config.robot.control.action_clip_value)
-        trainable_policy_action = torch.clamp(actions.detach(), -clip_action_limit, clip_action_limit)
-        frozen_delta_action = torch.clamp(policy_output.detach(), -clip_action_limit, clip_action_limit)
-        final_action = trainable_policy_action + frozen_delta_action
-
-        delta_model_requires_grad_count = (
-            self._count_trainable_params(self.loaded_policy.actor)
-            + self._count_trainable_params(self.loaded_policy.critic)
-        )
-        policy_trainable_param_count = self._count_main_policy_trainable_params()
-        optimizer_param_count = self._count_optimizer_params() if (
-            hasattr(self, "actor_optimizer") or hasattr(self, "critic_optimizer")
-        ) else None
-
-        logger.info(
-            f"[closed-loop action debug][iter {debug_iter}] "
-            f"trainable_policy_action_mean_abs={trainable_policy_action.abs().mean().item():.6f} "
-            f"frozen_delta_action_mean_abs={frozen_delta_action.abs().mean().item():.6f} "
-            f"final_action_mean_abs={final_action.abs().mean().item():.6f} "
-            f"delta_model_requires_grad_count={delta_model_requires_grad_count} "
-            f"policy_trainable_param_count={self._format_debug_value(policy_trainable_param_count)} "
-            f"optimizer_param_count={self._format_debug_value(optimizer_param_count)} "
-            f"delta_action_max_abs={frozen_delta_action.abs().max().item():.6f} "
-            f"final_action_max_abs={final_action.abs().max().item():.6f}"
-        )
-
 
 
     def _rollout_step(self, obs_dict):
@@ -162,8 +126,6 @@ class PPODeltaA(PPO):
         # self._eval_mode()
         # self.eval_policy = self._get_inference_policy()
         with torch.inference_mode():
-            debug_iter = getattr(self, "_debug_action_stats_iteration", self.current_learning_iteration)
-            should_log_action_debug = (debug_iter % 100 == 0)
             for i in range(self.num_steps_per_env):
                 # Compute the actions and values
                 # actions = self.actor.act(obs_dict["actor_obs"]).detach()
@@ -184,15 +146,12 @@ class PPODeltaA(PPO):
                 actor_state["actions"] = actions
                 
                 ################ inference the policy ################
-                with torch.no_grad():
-                    policy_output = self.loaded_policy.eval_policy(obs_dict['closed_loop_actor_obs']).detach()
+                policy_output = self.loaded_policy.eval_policy(self._get_loaded_policy_obs(obs_dict)).detach()
                 actor_state["actions_closed_loop"] = policy_output
 
                 ######################################################
 
                 obs_dict, rewards, dones, infos = self.env.step(actor_state)
-                if should_log_action_debug and i == 0:
-                    self._log_closed_loop_action_debug(debug_iter, actions, policy_output)
                 # critic_obs = privileged_obs if privileged_obs is not None else obs
                 for obs_key in obs_dict.keys():
                     obs_dict[obs_key] = obs_dict[obs_key].to(self.device)
@@ -241,8 +200,7 @@ class PPODeltaA(PPO):
 
     def _pre_eval_env_step(self, actor_state: dict):
         actions = self.eval_policy(actor_state["obs"]['actor_obs'])
-        with torch.no_grad():
-            actions_closed_loop = self.loaded_policy.eval_policy(actor_state['obs']['closed_loop_actor_obs']).detach()
+        actions_closed_loop = self.loaded_policy.eval_policy(self._get_loaded_policy_obs(actor_state['obs'])).detach()
 
         actor_state.update({"actions": actions, "actions_closed_loop": actions_closed_loop})
         for c in self.eval_callbacks:
