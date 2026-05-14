@@ -10,7 +10,7 @@ import torch
 sys.path.append("/root/autodl-tmp/ASAP")
 from humanoidverse.utils.torch_utils import quat_rotate_inverse
 
-#
+
 URDF_PATH = "/root/autodl-tmp/ASAP/humanoidverse/data/robots/g1/g1_29dof_anneal_23dof.urdf"
 ONNX_PATH = os.environ.get(
     "ONNX_PATH",
