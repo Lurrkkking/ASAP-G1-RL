@@ -11,7 +11,7 @@
 - 复杂人体动作在 G1 上的 motion tracking 训练
 - Isaac Gym → Genesis / MuJoCo 的 Sim2Sim 验证
 - locomotion、动作模仿与接触稳定性调试
-- ASAP delta action 阶段的数据采集、open-loop 训练与评估
+- ASAP delta action 阶段的数据采集、open-loop 训练与 closed-loop fine-tuning
 - 面向足球 kickup / juggling 的 RL 环境构建与任务重构
 
 > 原 ASAP 官方说明已保留为 `README_ORIGIN.md`，环境配置和基础使用方法可参考原文件。
@@ -36,7 +36,74 @@
 | :---: | :---: |
 | <img src="media/Walk_fall.gif" width="400"> | <img src="media/Walk_Genesis.gif" width="400"> |
 
-### 3. G1 足球 kickup / juggling 任务（进行中）
+### 3. ASAP Delta Action Residual：MuJoCo-to-IsaacGym Sim2Sim
+
+该部分尝试复现 ASAP 中的 residual / delta action 思路，但目标并非真机复现，而是先在 **MuJoCo → Isaac Gym** 的 Sim2Sim 场景中验证残差补偿链路。
+
+核心目标是：
+
+> 用 MuJoCo 作为目标动力学环境，采集带 action 的 rollout；在 Isaac Gym 中训练 frozen deltaA；再将 frozen deltaA 注入 Isaac Gym，构造 corrected simulator，并对原始 motion tracking 主策略进行 closed-loop fine-tuning。
+
+#### Open-loop deltaA 评估
+
+open-loop 阶段使用 MuJoCo rollout-with-action 数据训练 deltaA。确定性评估时，在 Isaac Gym 中分别执行：
+
+- **Zero delta**：只执行 MuJoCo rollout 中记录的 action；
+- **Deterministic deltaA**：执行 MuJoCo action + learned residual action。
+
+在 paper-style open-loop 指标下，ankle-only deltaA 能显著降低 MuJoCo-to-IsaacGym replay error：
+
+| 指标 | Zero delta | Deterministic deltaA | 改善 |
+| :--- | ---: | ---: | ---: |
+| Eg-mpjpe (mm) | 1038.984 | 82.724 | 92.04% |
+| Empjpe (mm) | 316.271 | 40.539 | 87.18% |
+| Eacc (mm/frame²) | 7.569 | 4.559 | 39.77% |
+| Evel (mm/frame) | 24.483 | 6.484 | 73.51% |
+| **Paper mean improvement** | - | - | **73.13%** |
+| **Paper normalized improvement** | - | - | **73.13%** |
+
+该结果说明，deltaA 不是简单输出随机扰动，而是能够在 open-loop replay 中显著降低目标状态匹配误差。
+
+#### Closed-loop fine-tuning
+
+closed-loop 是 ASAP residual 流程的最后一环。训练时将 frozen deltaA 注入 Isaac Gym，作为 simulator dynamics correction；然后 fine-tune 原始 motion tracking 主策略。部署到 MuJoCo 时，只使用 fine-tuned main policy，不再叠加 deltaA。
+
+复现过程中发现一个关键问题：旧 closed-loop 配置在 `delta_action_scale=0` 时也不能退化为普通 motion tracking continue-train。也就是说，即便 frozen deltaA 没有实际参与动作，主策略仍然会因为 env、reset、termination、reward 和 PPO 超参不等价而发生 policy drift，尤其集中在 ankle / hip action 上。
+
+因此重新构建了 **baseline-equivalent closed-loop** 配置：
+
+- 保留 baseline motion tracking 的 reward 和 PPO 设置；
+- 主策略 actor observation 保持不变；
+- frozen deltaA 只通过 corrected action path 注入；
+- 当 `delta_action_scale=0` 时，closed-loop 退化为普通 baseline continue-train；
+- 通过 scale sweep 保守地测试非零 residual correction。
+
+目前最稳定的 closed-loop candidate 使用：
+
+- `delta_action_mask_mode = ankle_only`
+- `delta_action_scale = 0.05`
+- frozen open-loop deltaA checkpoint：`model_6000.pt`
+- fine-tuned main policy checkpoint：`model_13100.pt`
+
+MuJoCo closed-loop 数值评估如下：
+
+| 指标 | Closed-loop scale=0.05 |
+| :--- | ---: |
+| Eg-mpjpe | 317.775 |
+| Empjpe | 207.820 |
+| Eacc | 27.935 |
+| Evel | 31.004 |
+| **Paper mean improvement vs baseline** | **22.79%** |
+
+该策略在 MuJoCo 中保持稳定，而更大的 scale（如 `0.15`）表现明显变差。这说明 closed-loop residual correction 的 scale 需要保持保守，否则容易导致 ankle / hip action drift，并在目标动力学环境中被放大为抖动或摔倒。
+
+| Baseline MuJoCo rollout | Closed-loop scale=0.05 MuJoCo rollout |
+| :---: | :---: |
+| <img src="imgs/baseline.gif" width="400"> | <img src="imgs/005closed.gif" width="400"> |
+
+该部分不表述为完整真机 ASAP residual 复现，而是定位为 **ASAP residual 的 Sim2Sim 复现探索**：包括 MuJoCo rollout 采集、ankle-only open-loop deltaA 训练、paper-style open-loop evaluation、baseline-equivalent closed-loop fine-tuning 和 MuJoCo deployment evaluation。
+
+### 4. G1 足球 kickup / juggling 任务（进行中）
 
 这是目前最主要的任务线。目标不是简单让机器人“踢到球”，而是逐步训练出一种更可持续的控球能力：
 
@@ -90,27 +157,111 @@
 - 搭建 `genesis_simulation/`，支持在 Genesis 中加载 ONNX 策略测试。
 - 对比 Isaac Gym 与 Genesis 中的起跳高度、稳定性和落地行为，发现接触、阻尼和积分差异会显著影响高动态动作。
 - 重新启用域随机化后，Genesis 中的动作稳定性明显改善。
-- 补齐 MuJoCo ONNX 推理流程，并对齐控制频率、动作滤波和目标限速等参数。
+- 补齐 MuJoCo ONNX 推理流程，并对齐控制频率、动作滤波、目标限速和 policy action 语义。
 
-### ASAP delta action 复现探索
+### ASAP Delta Action 复现探索
 
-这部分围绕 ASAP 论文中的 delta action 阶段展开。与旧版 README 中的“解析 residual / oracle patch”不同，当前实现按最近的实验路线，直接围绕 ASAP 的 rollout-with-action 数据链路和 open-loop deltaA 训练进行复现。
+这部分围绕 ASAP 论文中的 delta action 阶段展开。与旧版笔记中的“解析 residual / oracle patch”不同，当前实现按更接近 ASAP 的数据驱动路线，围绕 rollout-with-action 数据采集、open-loop deltaA 训练、deterministic evaluation 和 closed-loop fine-tuning 进行复现。
 
-当前完成的工作包括：
+#### 为什么需要 delta action
 
-- 实现 Isaac Gym rollout logger，生成包含 `root / dof / body state` 与 23-DoF `action` 的 `motion_with_action.pkl`。
-- 完成 Gym → Gym sanity check，验证 `action` 空间、clip 语义、motion phase、`motion_lib` 读取和 deterministic actor mean 的一致性。
-- 将 CR7 motion tracking policy 导出为 ONNX，并在 MuJoCo 中构建本地 rollout 采集脚本，生成 MuJoCo target rollout pkl。
-- 使用 MuJoCo rollout pkl 训练 MuJoCo → Isaac Gym 的 open-loop deltaA。
-- 实现 zero-delta 与 deterministic-deltaA 对比评估，用于判断 deltaA 是否真实改善目标状态匹配。
+在 Isaac Gym 中训练出的 motion tracking policy，放到 MuJoCo、Genesis 或真实机器人中，不一定产生相同的状态转移。原因包括接触模型、阻尼、积分器、马达模型和刚体动力学差异。
 
-当前观察到的现象：
+delta action 的目标不是替代原始动作，而是在原始动作上增加一个小修正：
 
-- open-loop deltaA 能明显改善 root/body pose tracking；最佳 checkpoint 下 total diff norm 曾取得约 12% 的改善。
-- full-body 23-DoF deltaA 容易对 DoF velocity 和 closed-loop stability 产生副作用。
-- closed-loop fine-tuning 对 obs、reward、reference motion 和 frozen deltaA 接入方式非常敏感，目前仍处于调试阶段。
+`final_action = base_action + delta_action`
 
-因此，当前不把该部分表述为“完整复现 ASAP residual 结果”，而是作为 **ASAP delta action 数据链路与 open-loop 评估复现探索** 保留。
+在 open-loop 阶段，`base_action` 来自记录好的 target rollout；在 closed-loop 阶段，`base_action` 来自正在训练的 main policy。
+
+#### Rollout-with-action 数据采集
+
+原始 motion pkl 只包含参考动作状态，不包含 policy 在目标环境中执行过的 action。因此，deltaA 训练需要额外采集 `motion_with_action.pkl`，其中包括：
+
+- root state
+- DoF position / velocity
+- body position / velocity
+- body rotation
+- 23-DoF policy action
+
+这一步是 deltaA 训练的基础，因为 deltaA 需要知道目标环境中某一步执行了什么 action，以及该 action 导致了什么状态转移。
+
+#### Open-loop deltaA 训练
+
+在当前 Sim2Sim residual 实验中，先将 CR7 motion tracking policy 导出为 ONNX，并在 MuJoCo 中 rollout 得到 target trajectory。然后回到 Isaac Gym 中训练 deltaA，使 Isaac Gym 在执行相同 action 加 residual 后，更接近 MuJoCo 的状态转移。
+
+open-loop evaluation 比较两种情况：
+
+- **Zero delta**：在 Isaac Gym 中直接执行 MuJoCo rollout 里记录的 action；
+- **Deterministic deltaA**：执行 MuJoCo action + deterministic residual action。
+
+一个关键实现细节是：确定性评估中使用 actor mean，而不是 PPO sampled action。这样可以避免把 exploration noise 误认为 learned residual。
+
+当前最佳 ankle-only open-loop checkpoint 的 paper-style deterministic replay 结果如下：
+
+| 指标 | Zero delta | Deterministic deltaA | 改善 |
+| :--- | ---: | ---: | ---: |
+| Eg-mpjpe (mm) | 1038.984 | 82.724 | 92.04% |
+| Empjpe (mm) | 316.271 | 40.539 | 87.18% |
+| Eacc (mm/frame²) | 7.569 | 4.559 | 39.77% |
+| Evel (mm/frame) | 24.483 | 6.484 | 73.51% |
+| **Paper mean improvement** | - | - | **73.13%** |
+
+这说明 ankle-only deltaA 能显著降低 MuJoCo-to-IsaacGym 的 open-loop replay error。
+
+#### 为什么选择 ankle-only residual
+
+Full-body 23-DoF residual 虽然可以改善 root / body pose tracking，但容易对 DoF velocity 和 closed-loop stability 产生副作用。相比之下，ankle-only residual 更局部、更保守，也更接近 ASAP 真实部署中对 G1 的使用方式。
+
+当前 ankle-only mask 只保留四个 residual 维度：
+
+- left ankle pitch
+- left ankle roll
+- right ankle pitch
+- right ankle roll
+
+注意：主 motion action 仍然是 23 维。被限制的是 residual correction，而不是原始动作。
+
+#### Closed-loop fine-tuning
+
+初始 closed-loop 尝试不稳定。排查后发现，旧 closed-loop 配置在 `delta_action_scale=0` 时也不能退化为普通 baseline motion tracking continuation。它使用了不同的 environment、reset 逻辑、termination 设置、reward 权重和 PPO 超参数，导致即使 frozen deltaA 实际不生效，主策略也会发生 policy drift。
+
+因此重新构建了 **baseline-equivalent closed-loop** 配置。核心 sanity check 是：
+
+`delta_action_scale = 0` 时，closed-loop training 应该等价于普通 baseline motion tracking continue-train。
+
+通过该等价性检查后，再保守地测试非零 residual scale。目前最稳定的结果为：
+
+- `delta_action_scale = 0.05`
+- `delta_action_mask_mode = ankle_only`
+- fine-tuned main policy: `model_13100.pt / model_13100.onnx`
+
+MuJoCo closed-loop deployment 结果如下：
+
+| 指标 | 数值 |
+| :--- | ---: |
+| Eg-mpjpe | 317.775 |
+| Empjpe | 207.820 |
+| Eacc | 27.935 |
+| Evel | 31.004 |
+| Paper mean improvement vs baseline | 22.79% |
+| Ankle action drift vs baseline | 1.470 |
+| Hip action drift vs baseline | 0.964 |
+| Action rate | 3.431 |
+
+该 closed-loop policy 在 MuJoCo 中能够稳定运行；但 `scale=0.15` 已经明显变差，说明 residual correction 的 scale 不能过大。当前结果更适合表述为一个稳定的 Sim2Sim closed-loop candidate，而不是完整真机 ASAP 复现。
+
+#### 当前 residual 结论
+
+当前阶段性结论：
+
+- open-loop MuJoCo-to-IsaacGym deltaA 在 paper-style replay 指标上有效；
+- ankle-only residual 比 full-body residual 更稳定；
+- closed-loop fine-tuning 对 baseline 等价性和 residual scale 非常敏感；
+- baseline-equivalent closed-loop 修复了 `scale=0` 也会漂移的问题；
+- `delta_action_scale=0.05` 得到了一个稳定的 MuJoCo candidate，并有正向 paper-style improvement；
+- 更大的 scale 容易导致 ankle / hip action drift，并在 MuJoCo 中引发抖动或摔倒。
+
+因此，该部分定位为 **ASAP delta action 的 Sim2Sim 复现探索**，而不是完整 real-world residual 复现。
 
 ### 足球任务环境与任务重构
 
@@ -142,7 +293,8 @@
 - [ ] 统计二次摆腿时的球-脚最近距离，判断是时机问题、轨迹问题还是观测问题。
 - [ ] 增加球相对脚的局部几何观测，减少盲目摆腿。
 - [ ] 将“单次击球”继续重构为“前方可控区维持”任务，逐步加入高度、方向和下一拍准备状态约束。
-- [ ] 对 deltaA 做 ankle-only 或 lower-body-only 对照，减少 full-body residual 对关节速度和闭环稳定性的副作用。
+- [ ] 继续进行 baseline-equivalent closed-loop residual 的 scale sweep。
+- [ ] 通过更小 residual scale、early stopping 或 action regularization 降低 closed-loop 中的 ankle / hip action drift。
 - [ ] 继续完善 Genesis / MuJoCo 的 Sim2Sim 测试，评估策略是否具有跨引擎泛化能力。
 
 ---
