@@ -1,0 +1,28 @@
+[
+  {
+    "policy_name": "scale005_model13100",
+    "action_diff_mean_abs_vs_baseline": 0.2537690436662133,
+    "action_diff_max_abs_vs_baseline": 1.5298337936401367,
+    "q_target_diff_mean_abs_vs_baseline": 0.06344226241778972,
+    "q_target_diff_max_abs_vs_baseline": 0.3824584484100342,
+    "lower_body_action_diff_mean_abs_vs_baseline": 0.3198700694005881,
+    "ankle_action_diff_mean_abs_vs_baseline": 0.6205118538728401,
+    "hip_action_diff_mean_abs_vs_baseline": 0.20811651858376035,
+    "knee_action_diff_mean_abs_vs_baseline": 0.05384715218374978,
+    "upper_body_action_diff_mean_abs_vs_baseline": 0.1816588361094247,
+    "action_rate_diff_mean_abs_vs_baseline": 0.011530122941241725
+  },
+  {
+    "policy_name": "scale015_model13100",
+    "action_diff_mean_abs_vs_baseline": 0.36354723469070765,
+    "action_diff_max_abs_vs_baseline": 2.7710461616516113,
+    "q_target_diff_mean_abs_vs_baseline": 0.09088680928815966,
+    "q_target_diff_max_abs_vs_baseline": 0.6927615404129028,
+    "lower_body_action_diff_mean_abs_vs_baseline": 0.4744517682687096,
+    "ankle_action_diff_mean_abs_vs_baseline": 0.9045999296333479,
+    "hip_action_diff_mean_abs_vs_baseline": 0.2834559399148692,
+    "knee_action_diff_mean_abs_vs_baseline": 0.18714290235353553,
+    "upper_body_action_diff_mean_abs_vs_baseline": 0.24256047418583995,
+    "action_rate_diff_mean_abs_vs_baseline": 0.19668176431694756
+  }
+]

@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path('/root/autodl-tmp/ASAP')
+
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
@@ -35,7 +37,19 @@ def _build_eval_config(override_config: OmegaConf) -> OmegaConf:
     if train_config.eval_overrides is not None:
         train_config = OmegaConf.merge(train_config, train_config.eval_overrides)
 
-    return OmegaConf.merge(train_config, override_config)
+    config = OmegaConf.merge(train_config, override_config)
+    policy_checkpoint = OmegaConf.select(config, "algo.config.policy_checkpoint")
+    if policy_checkpoint in (None, "", "null"):
+        fallback_policy_checkpoint = OmegaConf.select(train_config, "algo.config.policy_checkpoint")
+        if fallback_policy_checkpoint not in (None, "", "null"):
+            OmegaConf.update(
+                config,
+                "algo.config.policy_checkpoint",
+                str(fallback_policy_checkpoint),
+                force_add=True,
+            )
+
+    return config
 
 
 @hydra.main(config_path="config", config_name="base_eval")
@@ -49,8 +63,11 @@ def main(override_config: OmegaConf):
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger().addHandler(HydraLoggerBridge())
 
-    os.chdir(hydra.utils.get_original_cwd())
+    os.chdir(REPO_ROOT)
     config = _build_eval_config(override_config)
+
+    if not Path(config.robot.asset.asset_root).is_absolute():
+        config.robot.asset.asset_root = str((REPO_ROOT / config.robot.asset.asset_root).resolve())
 
     checkpoint = Path(config.checkpoint)
     ckpt_num = checkpoint.stem.split("_")[-1]

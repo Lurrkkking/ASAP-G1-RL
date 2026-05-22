@@ -1,0 +1,81 @@
+{
+  "done_steps": {
+    "baseline": 50.0,
+    "closed_loop_scale0": 50.0,
+    "closed_loop_minus_baseline": 0.0
+  },
+  "reward_mean": {
+    "baseline": 0.1916472002863884,
+    "closed_loop_scale0": 0.19528134491294621,
+    "closed_loop_minus_baseline": 0.0036341446265578115
+  },
+  "reward_min": {
+    "baseline": 0.14291900396347046,
+    "closed_loop_scale0": -0.011867808178067207,
+    "closed_loop_minus_baseline": -0.15478681214153767
+  },
+  "root_height_min": {
+    "baseline": 0.7262078523635864,
+    "closed_loop_scale0": 0.7167348265647888,
+    "closed_loop_minus_baseline": -0.009473025798797607
+  },
+  "root_height_max": {
+    "baseline": 0.8296606540679932,
+    "closed_loop_scale0": 0.8015872836112976,
+    "closed_loop_minus_baseline": -0.028073370456695557
+  },
+  "upper_body_diff_norm": {
+    "baseline": 0.12543347656726836,
+    "closed_loop_scale0": 0.13267019763588905,
+    "closed_loop_minus_baseline": 0.007236721068620694
+  },
+  "lower_body_diff_norm": {
+    "baseline": 0.09399478875100613,
+    "closed_loop_scale0": 0.10443576216697693,
+    "closed_loop_minus_baseline": 0.010440973415970806
+  },
+  "joint_pos_diff_norm": {
+    "baseline": 1.6644151282310486,
+    "closed_loop_scale0": 1.649940013885498,
+    "closed_loop_minus_baseline": -0.0144751143455506
+  },
+  "policy_action_mean_abs": {
+    "baseline": 1.8484237921237945,
+    "closed_loop_scale0": 1.8256763315200806,
+    "closed_loop_minus_baseline": -0.02274746060371391
+  },
+  "policy_action_max_abs": {
+    "baseline": 6.2059526443481445,
+    "closed_loop_scale0": 7.2136383056640625,
+    "closed_loop_minus_baseline": 1.007685661315918
+  },
+  "final_action_mean_abs": {
+    "baseline": 1.8484237921237945,
+    "closed_loop_scale0": 1.8256763315200806,
+    "closed_loop_minus_baseline": -0.02274746060371391
+  },
+  "final_action_max_abs": {
+    "baseline": 6.2059526443481445,
+    "closed_loop_scale0": 7.2136383056640625,
+    "closed_loop_minus_baseline": 1.007685661315918
+  },
+  "frozen_delta_masked_mean_abs": {
+    "baseline": 0.0,
+    "closed_loop_scale0": 0.17354081586003303,
+    "closed_loop_minus_baseline": 0.17354081586003303
+  },
+  "delta_over_policy_mean": {
+    "baseline": 0.0,
+    "closed_loop_scale0": 0.0,
+    "closed_loop_minus_baseline": 0.0
+  },
+  "action_clip_frac": {
+    "baseline": 0.0,
+    "closed_loop_scale0": 0.0,
+    "closed_loop_minus_baseline": 0.0
+  },
+  "scale_zero_final_equals_main": {
+    "baseline": true,
+    "closed_loop_scale0": true
+  }
+}

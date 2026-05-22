@@ -1,6 +1,7 @@
 from isaacgym import gymapi
 from pathlib import Path
 import torch
+from loguru import logger
 
 from humanoidverse.envs.hitball_cylinder_v1.hitball_cylinder_events import update_cylinder_events
 from humanoidverse.envs.hitball_cylinder_v1.hitball_cylinder_obs import compute_cylinder_obs
@@ -81,6 +82,18 @@ class HitBallCylinderV1(
             [self.simulator.find_rigid_body_indice(name) for name in self.target_foot_candidate_body_names],
             dtype=torch.long,
             device=self.device,
+        )
+        self.target_foot_candidate_body_mask = torch.zeros(
+            self.num_bodies, dtype=torch.bool, device=self.device
+        )
+        self.target_foot_candidate_body_mask[self.target_foot_candidate_body_indices] = True
+        self.debug_ball_contact_topk = int(getattr(self.config, "debug_ball_contact_topk", 5))
+        self.debug_print_body_name_map = bool(getattr(self.config, "debug_print_body_name_map", True))
+        self.debug_print_contact_event_details = bool(
+            getattr(self.config, "debug_print_contact_event_details", False)
+        )
+        self.debug_log_contact_diagnostics = bool(
+            getattr(self.config, "debug_log_contact_diagnostics", True)
         )
         upper_body_terminate_names = getattr(self.config, "wrong_contact_terminate_body_names", None)
         if upper_body_terminate_names is None:
@@ -253,9 +266,74 @@ class HitBallCylinderV1(
         self.debug_non_target_ball_contact_dist_thresh = float(
             getattr(self.config, "debug_non_target_ball_contact_dist_thresh", self.contact_dist_threshold * 1.5)
         )
+        self.debug_shank_contact_like = bool(getattr(self.config, "debug_shank_contact_like", True))
+        self.debug_shank_near_thresh = float(
+            getattr(self.config, "debug_shank_near_thresh", self.contact_dist_threshold)
+        )
         self.ball_contact_min_height = float(getattr(self.config, "ball_contact_min_height", 0.12))
         self.ball_ground_height = float(getattr(self.config.termination, "ball_ground_height", 0.12))
         self.ball_max_dist_to_base = float(getattr(self.config.termination, "ball_max_dist_to_base", 2.0))
+        self.debug_shank_knee_body_name = None
+        debug_knee_candidates = []
+        config_debug_knee_name = getattr(self.config, "debug_shank_knee_body_name", None)
+        if config_debug_knee_name is not None:
+            debug_knee_candidates.append(config_debug_knee_name)
+        debug_knee_candidates.append("right_knee_link")
+        debug_knee_candidates.extend(
+            [name for name in self.body_names if ("right" in name.lower() and "knee" in name.lower())]
+        )
+        for candidate_name in debug_knee_candidates:
+            if candidate_name in self.body_names:
+                self.debug_shank_knee_body_name = candidate_name
+                break
+        self.debug_shank_knee_body_idx = (
+            self.simulator.find_rigid_body_indice(self.debug_shank_knee_body_name)
+            if self.debug_shank_knee_body_name is not None
+            else None
+        )
+        self.debug_shank_ankle_body_name = getattr(
+            self.config, "debug_shank_ankle_body_name", self.target_foot_body_name
+        )
+        if self.debug_shank_ankle_body_name not in self.body_names:
+            self.debug_shank_ankle_body_name = self.target_foot_body_name
+        self.debug_shank_ankle_body_idx = self.simulator.find_rigid_body_indice(
+            self.debug_shank_ankle_body_name
+        )
+        candidate_index_name_pairs = [
+            (
+                int(body_idx),
+                self.body_names[int(body_idx)],
+            )
+            for body_idx in self.target_foot_candidate_body_indices.detach().cpu().tolist()
+        ]
+        risky_markers = ("knee", "shank", "calf")
+        self.target_contact_candidate_risky_body_names = [
+            name
+            for name in self.target_foot_candidate_body_names
+            if any(marker in name.lower() for marker in risky_markers) or name.startswith("body_")
+        ]
+        self.target_contact_candidate_ankle_adjacent_body_names = [
+            name for name in self.target_foot_candidate_body_names if "ankle_pitch" in name.lower()
+        ]
+        if self.debug_print_body_name_map:
+            logger.info(
+                "HitBallCylinder body index map: {}",
+                list(enumerate(self.body_names)),
+            )
+            logger.info(
+                "HitBallCylinder target contact whitelist: target_body={} target_idx={} "
+                "candidate_names={} candidate_index_name_pairs={} risky_candidates={} "
+                "ankle_adjacent_candidates={} shank_proxy=({}, {}) shank_thresh={:.4f}",
+                self.target_foot_body_name,
+                int(self.target_foot_body_idx),
+                self.target_foot_candidate_body_names,
+                candidate_index_name_pairs,
+                self.target_contact_candidate_risky_body_names,
+                self.target_contact_candidate_ankle_adjacent_body_names,
+                self.debug_shank_knee_body_name,
+                self.debug_shank_ankle_body_name,
+                self.debug_shank_near_thresh,
+            )
 
         self.zone_reward_weight = torch.tensor(
             getattr(self.config.rewards, "zone_reward_weight", [8.0, 4.0, 4.0]),
@@ -307,6 +385,63 @@ class HitBallCylinderV1(
             self.num_envs, dtype=torch.bool, device=self.device
         )
         self.prev_ball_has_contact = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        topk = max(1, int(self.debug_ball_contact_topk))
+        self.ball_has_contact = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.ball_contact_nearest_body_index = torch.full(
+            (self.num_envs,), -1, dtype=torch.long, device=self.device
+        )
+        self.ball_contact_nearest_body_distance = torch.full(
+            (self.num_envs,), float("inf"), dtype=torch.float, device=self.device
+        )
+        self.ball_contact_nearest_body_is_target = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.ball_contact_topk_body_indices = torch.full(
+            (self.num_envs, topk), -1, dtype=torch.long, device=self.device
+        )
+        self.ball_contact_topk_body_distances = torch.full(
+            (self.num_envs, topk), float("inf"), dtype=torch.float, device=self.device
+        )
+        self.saved_contact_start_nearest_body_index = torch.full(
+            (self.num_envs,), -1, dtype=torch.long, device=self.device
+        )
+        self.saved_contact_start_nearest_body_distance = torch.full(
+            (self.num_envs,), float("inf"), dtype=torch.float, device=self.device
+        )
+        self.saved_contact_start_nearest_body_is_target = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.contact_had_non_target_force = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.contact_had_non_target_ball_nearest = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.shank_contact_like = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.shank_contact_like_dist = torch.full(
+            (self.num_envs,), float("inf"), dtype=torch.float, device=self.device
+        )
+        self.debug_contact_end_phase_strike = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.debug_contact_end_saved_strike_gate = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.debug_contact_end_short_contact = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.debug_contact_end_impact_geometry_good = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.debug_contact_end_release_good = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.debug_contact_end_post_release_trajectory_good = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.debug_contact_end_not_carry = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
         self.last_post_release_horizontal_speed = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self.episode_start_base_pos = self.simulator.robot_root_states[:, 0:3].clone()
         self.term_reason = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)

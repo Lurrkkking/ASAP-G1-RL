@@ -5,22 +5,31 @@ algo:
   _recursive_: False
   config:
     policy_checkpoint: null
-    num_learning_epochs: 5
+    delta_action_mask_mode: ankle_only
+    delta_action_scale: 1.0
+    action_anchor:
+      enabled: false
+      weight: 0.01
+      lower_body_weight: 0.05
+      ankle_hip_weight: 0.1
+      policy_checkpoint: null
+    closed_loop_debug_interval: 50
+    num_learning_epochs: 2
     num_mini_batches: 4
-    clip_param: 0.2
+    clip_param: 0.1
     gamma: 0.99
     lam: 0.95
     value_loss_coef: 1.0
     entropy_coef: 0.01
-    actor_learning_rate: 1.e-3 # 5e-4 # 1.e-3
-    critic_learning_rate: 1.e-3 # 5e-4 # 1.e-3
+    actor_learning_rate: 3.e-4
+    critic_learning_rate: 3.e-4
     max_grad_norm: 1.0
     use_clipped_value_loss: True
     schedule: "adaptive"
-    desired_kl: 0.01
+    desired_kl: 0.005
 
     num_steps_per_env: 24
-    save_interval: 100
+    save_interval: 20
 
     load_optimizer: True
 
@@ -31,14 +40,14 @@ algo:
     eval_callbacks: null
 
     module_dict:
-      actor: 
+      actor:
         input_dim: [actor_obs]
         output_dim: [robot_action_dim]
         layer_config:
           type: MLP
           hidden_dims: [512, 256, 128]
           activation: ELU
-      critic: 
+      critic:
         type: MLP
         input_dim: [critic_obs]
         output_dim: [1]

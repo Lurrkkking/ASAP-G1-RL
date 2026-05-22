@@ -2,11 +2,18 @@ import os
 import sys
 from pathlib import Path
 
+try:
+    import ninja
+
+    os.environ["PATH"] = str(Path(ninja.BIN_DIR)) + os.pathsep + os.environ.get("PATH", "")
+except Exception:
+    pass
+
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from hydra.core.config_store import ConfigStore
 from hydra.utils import instantiate
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, open_dict
 
 import logging
 from loguru import logger
@@ -94,6 +101,12 @@ def main(config: OmegaConf):
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
     
     pre_process_config(config)
+
+    with open_dict(config.env.config):
+        config.env.config.robot = config.robot
+        config.env.config.obs = config.obs
+        if hasattr(config, "algo") and hasattr(config.algo, "config"):
+            config.env.config.algo = config.algo
 
     # torch.set_float32_matmul_precision("medium")
 

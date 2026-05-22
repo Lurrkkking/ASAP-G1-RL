@@ -63,8 +63,16 @@ env:
     ball_contact_min_height: 0.12
     debug_print_non_target_ball_contact: false
     debug_print_ball_contact_nearest_bodies: false
+    debug_ball_contact_topk: 5
+    debug_print_body_name_map: true
+    debug_print_contact_event_details: false
+    debug_log_contact_diagnostics: true
     debug_print_non_target_ball_contact_topk: 3
     debug_non_target_ball_contact_dist_thresh: 0.27
+    debug_shank_contact_like: true
+    debug_shank_near_thresh: 0.18
+    debug_shank_knee_body_name: right_knee_link
+    debug_shank_ankle_body_name: ${robot.right_foot_name}
 
     ball_init_offset: [0.40, 0.0, -0.2] # 相对机器人[0.0, 0.0, 0.8]
     ball_init_pos_noise: [0.02, 0.01, 0.02]

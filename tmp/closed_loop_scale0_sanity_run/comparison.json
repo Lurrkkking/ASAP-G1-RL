@@ -1,0 +1,81 @@
+{
+  "done_steps": {
+    "baseline": 50.0,
+    "closed_loop_scale0": 50.0,
+    "closed_loop_minus_baseline": 0.0
+  },
+  "reward_mean": {
+    "baseline": 0.190719203799963,
+    "closed_loop_scale0": 0.10287516742944718,
+    "closed_loop_minus_baseline": -0.08784403637051581
+  },
+  "reward_min": {
+    "baseline": 0.11374900490045547,
+    "closed_loop_scale0": 0.08582768589258194,
+    "closed_loop_minus_baseline": -0.027921319007873535
+  },
+  "root_height_min": {
+    "baseline": 0.7198012471199036,
+    "closed_loop_scale0": 0.7113696336746216,
+    "closed_loop_minus_baseline": -0.008431613445281982
+  },
+  "root_height_max": {
+    "baseline": 0.8282853364944458,
+    "closed_loop_scale0": 0.8330988883972168,
+    "closed_loop_minus_baseline": 0.004813551902770996
+  },
+  "upper_body_diff_norm": {
+    "baseline": 0.11032327555119992,
+    "closed_loop_scale0": 0.11088396720588208,
+    "closed_loop_minus_baseline": 0.0005606916546821578
+  },
+  "lower_body_diff_norm": {
+    "baseline": 0.08877009823918343,
+    "closed_loop_scale0": 0.09413990035653114,
+    "closed_loop_minus_baseline": 0.005369802117347708
+  },
+  "joint_pos_diff_norm": {
+    "baseline": 1.6708027029037475,
+    "closed_loop_scale0": 1.6383987736701966,
+    "closed_loop_minus_baseline": -0.032403929233550954
+  },
+  "policy_action_mean_abs": {
+    "baseline": 1.870365114212036,
+    "closed_loop_scale0": 1.761073944568634,
+    "closed_loop_minus_baseline": -0.10929116964340202
+  },
+  "policy_action_max_abs": {
+    "baseline": 6.264152526855469,
+    "closed_loop_scale0": 6.258428573608398,
+    "closed_loop_minus_baseline": -0.0057239532470703125
+  },
+  "final_action_mean_abs": {
+    "baseline": 1.870365114212036,
+    "closed_loop_scale0": 1.761073944568634,
+    "closed_loop_minus_baseline": -0.10929116964340202
+  },
+  "final_action_max_abs": {
+    "baseline": 6.264152526855469,
+    "closed_loop_scale0": 6.258428573608398,
+    "closed_loop_minus_baseline": -0.0057239532470703125
+  },
+  "frozen_delta_masked_mean_abs": {
+    "baseline": 0.0,
+    "closed_loop_scale0": 0.22142926946282387,
+    "closed_loop_minus_baseline": 0.22142926946282387
+  },
+  "delta_over_policy_mean": {
+    "baseline": 0.0,
+    "closed_loop_scale0": 0.0,
+    "closed_loop_minus_baseline": 0.0
+  },
+  "action_clip_frac": {
+    "baseline": 0.0,
+    "closed_loop_scale0": 0.0,
+    "closed_loop_minus_baseline": 0.0
+  },
+  "scale_zero_final_equals_main": {
+    "baseline": true,
+    "closed_loop_scale0": true
+  }
+}

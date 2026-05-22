@@ -1,0 +1,32 @@
+# @package _global_
+
+defaults:
+  - /algo: ppo_train_delta_a
+  - /env: motion_tracking
+
+experiment_name: Train_Delta_A_Closed_Loop_Baseline_Equiv
+
+algo:
+  config:
+    delta_action_mask_mode: ankle_only
+    delta_action_scale: 0.0
+    closed_loop_debug_interval: 50
+    num_learning_epochs: 5
+    num_mini_batches: 4
+    clip_param: 0.2
+    gamma: 0.99
+    lam: 0.95
+    value_loss_coef: 1.0
+    entropy_coef: 0.01
+    actor_learning_rate: 0.001
+    critic_learning_rate: 0.001
+    max_grad_norm: 1.0
+    use_clipped_value_loss: True
+    schedule: adaptive
+    desired_kl: 0.01
+    num_steps_per_env: 24
+    save_interval: 100
+    load_optimizer: True
+    init_noise_std: 0.8
+    num_learning_iterations: 1000000
+    init_at_random_ep_len: True

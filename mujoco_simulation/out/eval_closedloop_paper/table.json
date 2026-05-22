@@ -1,0 +1,44 @@
+[
+  {
+    "checkpoint": "/root/autodl-tmp/ASAP/logs/TEST_CR7_Siuuu/baseline13000group/model_13000.pt",
+    "scale": 0.0,
+    "fall_step": 57,
+    "Eg_mpjpe": 395.52362060546875,
+    "Empjpe": 290.1199951171875,
+    "Eacc": 27.324525833129883,
+    "Evel": 56.76298522949219,
+    "paper_mean_improve_vs_baseline": 0.0,
+    "ankle_action_diff": 0.0,
+    "hip_action_diff": 0.0,
+    "action_rate": 3.9982357328398184,
+    "video_path": ""
+  },
+  {
+    "checkpoint": "/root/autodl-tmp/ASAP/logs/DeltaA_Equiv/20260522_175306-ClosedLoop_BaselineEquiv_Scale005_100-motion_tracking-g1_29dof_anneal_23dof/model_13100.pt",
+    "scale": 0.05,
+    "fall_step": 67,
+    "Eg_mpjpe": 317.7750549316406,
+    "Empjpe": 207.82005310058594,
+    "Eacc": 27.935457229614258,
+    "Evel": 31.003707885742188,
+    "paper_mean_improve_vs_baseline": 22.792313468495937,
+    "ankle_action_diff": 1.4704623522598352,
+    "hip_action_diff": 0.9635232887161311,
+    "action_rate": 3.4314246248843063,
+    "video_path": ""
+  },
+  {
+    "checkpoint": "/root/autodl-tmp/ASAP/logs/DeltaA_Equiv/20260522_182927-ClosedLoop_BaselineEquiv_Scale015_100-motion_tracking-g1_29dof_anneal_23dof/model_13100.pt",
+    "scale": 0.15,
+    "fall_step": 59,
+    "Eg_mpjpe": 269.6564025878906,
+    "Empjpe": 271.56951904296875,
+    "Eacc": 26.076501846313477,
+    "Evel": 133.86483764648438,
+    "paper_mean_improve_vs_baseline": -23.261699550728768,
+    "ankle_action_diff": 1.663271459482484,
+    "hip_action_diff": 1.0919576262013386,
+    "action_rate": 3.0074870677317604,
+    "video_path": ""
+  }
+]

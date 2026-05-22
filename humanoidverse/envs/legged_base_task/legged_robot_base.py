@@ -53,6 +53,8 @@ class LeggedRobotBase(BaseTask):
         self.d_gains = torch.zeros(self.dim_actions, dtype=torch.float, device=self.device, requires_grad=False)
         self.actions = torch.zeros(self.num_envs, self.dim_actions, dtype=torch.float, device=self.device, requires_grad=False)
         self.actions_after_delay = torch.zeros(self.num_envs, self.dim_actions, dtype=torch.float, device=self.device, requires_grad=False)
+        self.closed_loop_actions = torch.zeros(self.num_envs, self.dim_actions, dtype=torch.float, device=self.device, requires_grad=False)
+        self.trainable_policy_actions = torch.zeros(self.num_envs, self.dim_actions, dtype=torch.float, device=self.device, requires_grad=False)
         self.last_actions = torch.zeros(self.num_envs, self.dim_actions, dtype=torch.float, device=self.device, requires_grad=False)
         self.last_dof_pos = torch.zeros_like(self.simulator.dof_pos)
         self.last_dof_vel = torch.zeros_like(self.simulator.dof_vel)
@@ -200,6 +202,14 @@ class LeggedRobotBase(BaseTask):
             actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
         """
         actions = actor_state["actions"]
+        if "actions_closed_loop" in actor_state:
+            self.closed_loop_actions = actor_state["actions_closed_loop"].to(self.device)
+        else:
+            self.closed_loop_actions.zero_()
+        if "actions_main_policy" in actor_state:
+            self.trainable_policy_actions = actor_state["actions_main_policy"].to(self.device)
+        else:
+            self.trainable_policy_actions = actions.to(self.device)
         # actions *= 0.0
         self._pre_physics_step(actions)
         self._physics_step()
@@ -959,6 +969,12 @@ class LeggedRobotBase(BaseTask):
     
     def _get_obs_dof_vel(self,):
         return self.simulator.dof_vel
+
+    def _get_obs_actions_closed_loop(self,):
+        return self.closed_loop_actions.clone()
+
+    def _get_obs_actions_sim2real_policy(self,):
+        return self.trainable_policy_actions.clone()
     
     def _get_obs_history(self,):
         assert "history" in self.config.obs.obs_auxiliary.keys()

@@ -1,7 +1,5 @@
 import torch
 import numpy as np
-from pathlib import Path
-import os
 from isaac_utils.rotations import (
     my_quat_rotate,
     calc_heading_quat_inv,
@@ -17,18 +15,11 @@ from humanoidverse.utils.motion_lib.skeleton import SkeletonTree
 from humanoidverse.utils.motion_lib.motion_lib_robot import MotionLibRobot
 
 from termcolor import colored
-from loguru import logger
 
 from scipy.spatial.transform import Rotation as sRot
 import joblib
 
 from humanoidverse.envs.motion_tracking.motion_tracking import LeggedRobotMotionTracking
-
-
-def _to_list(x):
-    if torch.is_tensor(x):
-        return x.detach().cpu().numpy().tolist()
-    return np.asarray(x).tolist()
 
 
 class DeltaA_OpenLoop(LeggedRobotMotionTracking):
@@ -38,55 +29,50 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         self.delta_action_dof_heatmaps = torch.zeros((self.simulator.num_envs, self.num_dofs)).to(device)
         self.detla_action_percentage_heatmaps = torch.zeros((self.simulator.num_envs, self.num_dofs)).to(device)
         self.delta_action_cnt = 1
-        self._alignment_debug_print_count = 0
+        self.delta_action_mask_mode = self._get_delta_action_mask_mode()
+        self.ankle_delta_indices = self._get_ankle_delta_indices()
+        self.delta_action_mask = self._build_delta_action_mask()
 
-    def _debug_print_action_alignment(self, motion_action_raw, motion_action_scaled):
-        if self._alignment_debug_print_count >= 5:
-            return
+    def _get_delta_action_mask_mode(self):
+        algo_cfg = getattr(self.config, "algo", None)
+        if algo_cfg is None:
+            return "full"
+        algo_inner_cfg = getattr(algo_cfg, "config", None)
+        if algo_inner_cfg is None:
+            return "full"
+        return str(getattr(algo_inner_cfg, "delta_action_mask_mode", "full"))
 
-        env_id = 0
-        motion_id = self.motion_ids[env_id : env_id + 1]
-        motion_time = (self.episode_length_buf[env_id : env_id + 1] + 1) * self.dt + self.motion_start_times[env_id : env_id + 1]
-        motion_len = self._motion_lib._motion_lengths[motion_id]
-        num_frames = self._motion_lib._motion_num_frames[motion_id]
-        motion_dt = self._motion_lib._motion_dt[motion_id]
-        frame_idx0, frame_idx1, blend = self._motion_lib._calc_frame_blend(motion_time, motion_len, num_frames, motion_dt)
-        f0l = frame_idx0 + self._motion_lib.length_starts[motion_id]
-        motion_state = self._motion_lib.get_motion_state(motion_id, motion_time, offset=self.env_origins[env_id : env_id + 1])
-
-        msg_parts = [
-            f"[DELTA_A_ALIGN] debug_idx={self._alignment_debug_print_count}",
-            f"common_step_counter={int(self.common_step_counter)}",
-            f"episode_length_buf0={int(self.episode_length_buf[env_id].item())}",
-            f"motion_id0={int(motion_id.item())}",
-            f"motion_time0={float(motion_time.item()):.6f}",
-            f"motion_start_time0={float(self.motion_start_times[env_id].item()):.6f}",
-            f"motion_len0={float(motion_len.item()):.6f}",
-            f"frame_idx0={int(frame_idx0.item())}",
-            f"frame_idx1={int(frame_idx1.item())}",
-            f"f0l={int(f0l.item())}",
-            f"blend={float(blend.item()):.6f}",
-            f"action_scale={float(self.config.robot.control.action_scale):.6f}",
-            f"action_clip_value={float(self.config.robot.control.action_clip_value):.6f}",
-            f"motion_action_loader[:8]={motion_action_raw[env_id, :8].detach().cpu().numpy().tolist()}",
-            f"motion_action_scaled[:8]={motion_action_scaled[env_id, :8].detach().cpu().numpy().tolist()}",
-            f"sim_dof_pos[:8]={self.simulator.dof_pos[env_id, :8].detach().cpu().numpy().tolist()}",
-            f"ref_dof_pos[:8]={motion_state['dof_pos'][env_id, :8].detach().cpu().numpy().tolist()}",
-            f"default_dof_pos[:8]={self.default_dof_pos[0, :8].detach().cpu().numpy().tolist()}",
+    def _get_ankle_delta_indices(self):
+        joint_names = list(self.config.robot.dof_names)
+        ankle_joint_names = [
+            "left_ankle_pitch_joint",
+            "left_ankle_roll_joint",
+            "right_ankle_pitch_joint",
+            "right_ankle_roll_joint",
         ]
+        indices = []
+        for joint_name in ankle_joint_names:
+            if joint_name not in joint_names:
+                raise ValueError(
+                    f"Could not find ankle joint '{joint_name}' in robot.dof_names={joint_names}"
+                )
+            indices.append(joint_names.index(joint_name))
+        return indices
 
-        sampled_motion = self._motion_lib._motion_data_list[int(motion_id.item())]
-        if isinstance(sampled_motion, dict) and "action" in sampled_motion:
-            msg_parts.append(
-                f"pkl_action[frame_idx0,:8]={_to_list(sampled_motion['action'][int(frame_idx0.item()), :8])}"
+    def _build_delta_action_mask(self):
+        mode = self.delta_action_mask_mode
+        if mode not in {"full", "ankle_only"}:
+            raise ValueError(
+                f"Unsupported delta_action_mask_mode={mode}. Expected one of ['full', 'ankle_only']."
             )
-        if isinstance(sampled_motion, dict) and "dof" in sampled_motion:
-            msg_parts.append(
-                f"pkl_dof[frame_idx0,:8]={_to_list(sampled_motion['dof'][int(frame_idx0.item()), :8])}"
-            )
+        mask = torch.ones(self.num_dofs, dtype=torch.float32, device=self.device)
+        if mode == "ankle_only":
+            mask.zero_()
+            mask[self.ankle_delta_indices] = 1.0
+        return mask
 
-        print(" ".join(msg_parts))
-        self._alignment_debug_print_count += 1
+    def _mask_delta_action(self, delta_action):
+        return delta_action * self.delta_action_mask
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.
@@ -103,7 +89,9 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
                 actions *= 0.
                 print("actions", actions)
                 pass
-        actions_scaled = actions * self.config.robot.control.action_scale
+        raw_delta_action = actions
+        masked_delta_action = self._mask_delta_action(raw_delta_action)
+        actions_scaled = masked_delta_action * self.config.robot.control.action_scale
         control_type = self.config.robot.control.control_type
         if self.config['add_extra_action']:
             motion_action_raw = self.get_open_loop_action_at_current_timestep()
@@ -112,18 +100,10 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
             # print("self.get_open_loop_action_at_current_timestep()", self.get_open_loop_action_at_current_timestep())
             motion_action_scaled = motion_action_raw * self.config.robot.control.action_scale
         else:
-            print("zeroing out motion_action") 
             motion_action_raw = torch.zeros_like(actions)
             motion_action_scaled = torch.zeros_like(actions_scaled)
 
-        self._debug_print_action_alignment(motion_action_raw, motion_action_scaled)
-
-        if hasattr(self.config, 'anklePR'):
-            if self.config.anklePR:
-                actions_scaled[:, [i for i in range(actions_scaled.shape[1]) if i not in [4,5,10,11]]] *= 0
-                
-                # print("zeroing out non-anklePR actions")
-
+        final_action_raw = motion_action_raw + masked_delta_action
         
         # add action_to_delta_a_heatmap
         
@@ -131,10 +111,17 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         self.detla_action_percentage_heatmaps = self.detla_action_percentage_heatmaps * self.delta_action_cnt / (1+self.delta_action_cnt) + 1/(1+self.delta_action_cnt) *  torch.abs(actions_scaled / motion_action_scaled)
         self.delta_action_cnt += 1
 
-        ankle_delta_raw = self.actions[:, [4, 5, 10, 11]]
-        self.log_dict["delta_a/delta_action_raw_mean_abs"] = self.actions.detach().abs().mean()
-        self.log_dict["delta_a/delta_action_raw_max_abs"] = self.actions.detach().abs().max()
-        self.log_dict["delta_a/delta_action_raw_l2_mean"] = torch.norm(self.actions.detach(), dim=-1).mean()
+        ankle_delta_raw = raw_delta_action[:, self.ankle_delta_indices]
+        ankle_delta_masked = masked_delta_action[:, self.ankle_delta_indices]
+        non_ankle_mask = (1.0 - self.delta_action_mask).bool()
+        non_ankle_delta_after_mask = masked_delta_action[:, non_ankle_mask]
+        if non_ankle_delta_after_mask.numel() > 0:
+            non_ankle_delta_after_mask_mean = non_ankle_delta_after_mask.detach().abs().mean()
+        else:
+            non_ankle_delta_after_mask_mean = torch.zeros((), dtype=masked_delta_action.dtype, device=masked_delta_action.device)
+        self.log_dict["delta_a/delta_action_raw_mean_abs"] = raw_delta_action.detach().abs().mean()
+        self.log_dict["delta_a/delta_action_raw_max_abs"] = raw_delta_action.detach().abs().max()
+        self.log_dict["delta_a/delta_action_raw_l2_mean"] = torch.norm(raw_delta_action.detach(), dim=-1).mean()
         self.log_dict["delta_a/delta_action_scaled_mean_abs"] = actions_scaled.detach().abs().mean()
         self.log_dict["delta_a/delta_action_scaled_max_abs"] = actions_scaled.detach().abs().max()
         self.log_dict["delta_a/motion_action_raw_mean_abs"] = motion_action_raw.detach().abs().mean()
@@ -146,10 +133,15 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         ).mean()
         self.log_dict["delta_a/ankle_delta_raw_mean_abs"] = ankle_delta_raw.detach().abs().mean()
         self.log_dict["delta_a/ankle_delta_raw_max_abs"] = ankle_delta_raw.detach().abs().max()
-
-
-        print("self.delta_action_dof_heatmaps", self.delta_action_dof_heatmaps)
-        print("self.detla_action_percentage_heatmaps", self.detla_action_percentage_heatmaps)
+        self.log_dict["delta_a/raw_delta_action_mean_abs"] = raw_delta_action.detach().abs().mean()
+        self.log_dict["delta_a/masked_delta_action_mean_abs"] = masked_delta_action.detach().abs().mean()
+        self.log_dict["delta_a/ankle_delta_mean_abs"] = ankle_delta_masked.detach().abs().mean()
+        self.log_dict["delta_a/non_ankle_delta_after_mask_mean_abs"] = non_ankle_delta_after_mask_mean
+        self.log_dict["delta_a/delta_over_motion_mean"] = (
+            masked_delta_action.detach().abs() / (motion_action_raw.detach().abs() + 1e-6)
+        ).mean()
+        self.log_dict["delta_a/final_action_mean_abs"] = final_action_raw.detach().abs().mean()
+        self.log_dict["delta_a/final_action_max_abs"] = final_action_raw.detach().abs().max()
         # import ipdb; ipdb.set_trace()
         # print("motion_action", motion_action)
         # print("motion_action", motion_action)
@@ -183,12 +175,12 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         
     def _reward_minimal_action_norm(self):
         # exp(-norm(actions))
-        return torch.exp(-torch.norm(self.actions, dim=-1))
+        return torch.exp(-torch.norm(self._mask_delta_action(self.actions), dim=-1))
 
 
     def _reward_normalized_penalty_minimal_action_norm(self):
         # exp(-norm(actions))
-        return torch.exp(-torch.norm(self.actions, dim=-1)) - 1
+        return torch.exp(-torch.norm(self._mask_delta_action(self.actions), dim=-1)) - 1
 
     def _reward_penalty_minimal_action_norm(self):
         # print("self.actions", self.actions)
@@ -206,7 +198,7 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
         #     return torch.exp(torch.norm(self.actions, dim=-1))-1
         
         # clip the reward from -1000 to 1000
-        return torch.exp(torch.norm(self.actions, dim=-1))-1
+        return torch.exp(torch.norm(self._mask_delta_action(self.actions), dim=-1))-1
         # return torch.clip(torch.exp(torch.norm(self.actions, dim=-1))-1, -1000, 1000)
         
     def get_open_loop_action_at_current_timestep(self):
@@ -224,16 +216,16 @@ class DeltaA_OpenLoop(LeggedRobotMotionTracking):
 
     def _get_obs_dof_pos_ankle_pitch_roll(self):
         # import ipdb; ipdb.set_trace()
-        return self.simulator.dof_pos[:, [4,5,10,11]]
+        return self.simulator.dof_pos[:, self.ankle_delta_indices]
     
     def _get_obs_dof_vel_ankle_pitch_roll(self):
-        return self.simulator.dof_vel[:, [4,5,10,11]]
+        return self.simulator.dof_vel[:, self.ankle_delta_indices]
 
     def _get_obs_actions_ankle_pitch_roll(self):
-        return self.actions[:, [4,5,10,11]]
+        return self.actions[:, self.ankle_delta_indices]
     
     def _get_obs_actions_open_loop_ankle_pitch_roll(self):
-        return self.get_open_loop_action_at_current_timestep()[:, [4,5,10,11]]
+        return self.get_open_loop_action_at_current_timestep()[:, self.ankle_delta_indices]
     
 
     

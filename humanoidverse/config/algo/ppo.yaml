@@ -4,6 +4,7 @@ algo:
   _target_: humanoidverse.agents.ppo.ppo.PPO
   _recursive_: False
   config:
+    delta_action_mask_mode: full
     num_learning_epochs: 5
     num_mini_batches: 4
     clip_param: 0.2
