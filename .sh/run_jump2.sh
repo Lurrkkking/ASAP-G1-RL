@@ -1,12 +1,12 @@
   #!/bin/bash
   set -euo pipefail
 
-  MOTION_FILE="/root/autodl-tmp/ASAP/humanoidverse/data/motions/g1_29dof_anneal_23dof/TairanTestbed/singles/0-motions_raw_tairantestbed_smpl_video_CR7_level2_filter_amass_scale092.pkl"
+  MOTION_FILE="/root/autodl-tmp/ASAP/humanoidverse/data/motions/g1_29dof_anneal_23dof/TairanTestbed/singles/0-motions_raw_tairantestbed_smpl_video_Kobe_level1_amass.pkl"
 
-  EXP_NAME="MotionTracking_CR72"
+  EXP_NAME="MotionTracking_KOBE"
 
   echo "====================================================="
-  echo "按 baseline13000group 配置启动 C 罗庆祝动作训练"
+  echo "启动牢大动作训练"
   echo "motion: ${MOTION_FILE}"
   echo "====================================================="
 
@@ -16,14 +16,14 @@
     +robot=g1/g1_29dof_anneal_23dof \
     +terrain=terrain_locomotion_plane \
     +domain_rand=domain_rand_base \
-    +rewards=motion_tracking/reward_motion_tracking_cr7_baseline13000group_old \
+    +rewards=motion_tracking/reward_motion_tracking_cr7_baseline13000group \
     +obs=motion_tracking/deepmimic_a2c_nolinvel_LARGEnoise_history \
     "robot.motion.motion_file=${MOTION_FILE}" \
-    project_name=TEST_CR7_2 \
+    project_name=TEST_KOBE \
     experiment_name=${EXP_NAME} \
     num_envs=4096 \
     headless=True \
-    checkpoint=/root/autodl-tmp/ASAP/logs/TEST_CR7_2/20260524_110105-MotionTracking_CR72-motion_tracking-g1_29dof_anneal_23dof/model_15500.pt \
+    checkpoint=/root/autodl-tmp/ASAP/logs/TEST_KOBE/20260524_095015-MotionTracking_KOBE-motion_tracking-g1_29dof_anneal_23dof/model_17800.pt \
     auto_load_latest=False \
     algo.config.num_mini_batches=4 \
     ++algo.config.learn_sigma=False\

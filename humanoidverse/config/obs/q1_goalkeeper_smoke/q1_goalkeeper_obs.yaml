@@ -1,0 +1,76 @@
+# @package _global_
+# Q1 Goalkeeper Smoke observation config
+
+obs:
+  obs_dict:
+    actor_obs:
+      [
+        base_ang_vel,
+        projected_gravity,
+        dof_pos,
+        dof_vel,
+        actions,
+        goalkeeper_task,
+      ]
+
+    critic_obs:
+      [
+        base_lin_vel,
+        base_ang_vel,
+        projected_gravity,
+        dof_pos,
+        dof_vel,
+        actions,
+        goalkeeper_task,
+      ]
+
+  obs_auxiliary:
+    history:
+      {
+        base_ang_vel: 5,
+        projected_gravity: 5,
+        dof_pos: 5,
+        dof_vel: 5,
+        actions: 5,
+      }
+
+  obs_scales:
+    {
+      base_lin_vel: 1.0,
+      base_ang_vel: 0.25,
+      projected_gravity: 1.0,
+      dof_pos: 1.0,
+      dof_vel: 0.05,
+      actions: 1.0,
+      goalkeeper_task: 1.0,
+      history: 1.0,
+    }
+
+  noise_scales:
+    {
+      base_lin_vel: 0.0,
+      base_ang_vel: 0.0,
+      projected_gravity: 0.0,
+      dof_pos: 0.0,
+      dof_vel: 0.0,
+      actions: 0.0,
+      goalkeeper_task: 0.0,
+      history: 0.0,
+    }
+
+  obs_dims:
+    - base_lin_vel: 3
+    - base_ang_vel: 3
+    - projected_gravity: 3
+    - dof_pos: ${robot.dof_obs_size}
+    - dof_vel: ${robot.dof_obs_size}
+    - actions: ${robot.actions_dim}
+    - goalkeeper_task: 13   # ball_rel_base(3) + ball_vel_rel_base(3) + ball_rel_rfoot(3) + ball_rel_lfoot(3) + has_contact(1)
+
+  add_noise_currculum: False
+  noise_initial_value: 0.05
+  noise_value_max: 1.0
+  noise_value_min: 0.00001
+  soft_dof_pos_curriculum_degree: 0.00001
+  soft_dof_pos_curriculum_level_down_threshold: 40
+  soft_dof_pos_curriculum_level_up_threshold: 42

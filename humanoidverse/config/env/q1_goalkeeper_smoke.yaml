@@ -1,0 +1,83 @@
+# @package _global_
+# Q1 Goalkeeper Smoke env config — robot stands in goal, blocks incoming balls
+
+defaults:
+  - legged_base
+
+env:
+  _target_: humanoidverse.envs.goalkeeper_task.goalkeeper_task.GoalkeeperTask
+  _recursive_: False
+  config:
+    robot: ${robot}
+    domain_rand: ${domain_rand}
+    rewards: ${rewards}
+    terrain: ${terrain}
+    obs: ${obs}
+    env_spacing: 5.0
+    max_episode_length_s: 5.0
+
+    normalization:
+      clip_actions: 100.0
+      clip_observations: 100.0
+
+    # --- Goal definition (world frame, robot at x=0 facing +x) ---
+    # Ball comes from +x toward -x (toward goal behind robot)
+    goal_x: -4.0       # goal line x (behind robot)
+    goal_width: 2.0     # full goal width (y range)
+    goal_y_min: -1.0
+    goal_y_max: 1.0
+    goal_height: 1.5    # goal height
+    goal_z_max: 1.5
+
+    # --- Ball physical properties ---
+    ball:
+      radius: 0.10
+      mass: 0.43
+      friction: 0.8
+      restitution: 0.45
+      linear_damping: 0.01
+      angular_damping: 0.01
+
+    # --- Ball init (Q1 smoke): three discrete shot heights, all ×0.6 ---
+    # Original heights: low=0.30, mid=0.50, high=0.70
+    # ×0.6: low=0.18, mid=0.30, high=0.42
+    ball_shot_heights: [0.18, 0.30, 0.42]   # low / mid / high (×0.6)
+    ball_shot_height_noise: 0.03              # ±noise around each discrete height
+    ball_init_x_range: [1.5, 2.5]            # ball starts 1.5-2.5m in front
+    ball_init_y_range: [-0.2, 0.2]           # narrow y spread
+    ball_init_speed_range: [1.5, 2.5]        # moderate speed
+    ball_init_yaw_deviation: 0.1             # small angle deviation
+    ball_init_angle_noise: 0.15              # slight upward angle
+
+    # --- Contact detection ---
+    contact_force_threshold: 1.0
+    contact_dist_threshold: 0.22
+
+    # --- Block detection ---
+    block_vel_change_threshold: 0.5
+    block_contact_force_threshold: 1.0
+
+    # --- Termination ---
+    termination:
+      terminate_by_contact: False
+      terminate_by_gravity: True
+      terminate_by_low_height: False
+      terminate_when_close_to_dof_pos_limit: False
+      terminate_when_close_to_dof_vel_limit: False
+      terminate_when_close_to_torque_limit: False
+      ball_ground_height: 0.12
+
+    termination_scales:
+      termination_gravity_x: 0.85    # relaxed from 0.95 for Q1 soft actuator
+      termination_gravity_y: 0.85    # relaxed from 0.95 for Q1 soft actuator
+      termination_min_base_height: 0.10
+      termination_close_to_dof_pos_limit: 0.98
+      termination_close_to_dof_vel_limit: 0.98
+      termination_close_to_torque_limit: 0.98
+
+log_task_name: q1_goalkeeper_smoke
+
+eval_overrides:
+  env:
+    config:
+      max_episode_length_s: 8.0

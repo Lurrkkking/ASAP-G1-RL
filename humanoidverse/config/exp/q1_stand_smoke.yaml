@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - /algo: ppo
+  - /env: q1_stand_smoke
+
+experiment_name: Q1_Stand_Smoke
+
+# Override PPO settings for small smoke test
+algo:
+  config:
+    num_steps_per_env: 24
+    num_learning_iterations: 500
+    save_interval: 50

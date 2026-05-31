@@ -1,0 +1,23 @@
+# @package _global_
+# Q1 Goalkeeper Smoke — midA3 (stiffness ×0.20, damping ×0.20)
+
+defaults:
+  - /algo: ppo
+  - /env: q1_goalkeeper_smoke
+  - /robot: q1/q1_22dof_goalkeeper_mid
+  - /simulator: isaacgym_hitball
+  - /domain_rand: NO_domain_rand
+  - /terrain: terrain_locomotion_plane
+  - /rewards: q1_goalkeeper_smoke/reward_q1_goalkeeper_smoke
+  - /obs: q1_goalkeeper_smoke/q1_goalkeeper_obs
+
+experiment_name: Q1_GK_MidA3
+
+algo:
+  config:
+    num_steps_per_env: 24
+    num_learning_iterations: 300
+    save_interval: 50
+    init_noise_std: 0.5
+
+num_envs: 64

@@ -1,0 +1,1 @@
+from humanoidverse.envs.goalkeeper_task.goalkeeper_task import GoalkeeperTask

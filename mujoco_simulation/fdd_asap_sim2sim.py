@@ -455,8 +455,8 @@ def run_policy_diff_diagnostics(cfg, baseline_policy_path, compare_policy_paths,
 
 
 def run_mujoco(cfg, headless=False, video_out="", width=1280, height=720, video_fps=50,
-               cam_follow_base=True, cam_distance=2.8, cam_azimuth=135.0, cam_elevation=-12.0,
-               cam_lookat_z=0.78):
+               cam_follow_base=True, cam_distance=3.5, cam_azimuth=135.0, cam_elevation=-12.0,
+               cam_lookat_z=0.78, cam_smoothing=0.1):
     model = mujoco.MjModel.from_xml_path(cfg.xml_path)
     data = mujoco.MjData(model)
     model.opt.timestep = cfg.simulation_dt
@@ -499,6 +499,10 @@ def run_mujoco(cfg, headless=False, video_out="", width=1280, height=720, video_
     stop_reason = "duration_reached"
     sim_steps = int(cfg.simulation_duration / cfg.simulation_dt)
     render_every_steps = max(1, int(round(1.0 / max(cfg.simulation_dt * float(video_fps), 1e-9))))
+
+    cam_base_x = float(data.qpos[0])
+    cam_base_y = float(data.qpos[1])
+    smoothing = max(0.0, min(1.0, float(cam_smoothing)))
     for _ in range(sim_steps):
         mj = get_mujoco_data(data)
         tau = pd_control(target_dof_pos, mj["mujoco_dof_pos"], np.zeros_like(cfg.kds), mj["mujoco_dof_vel"], cfg)
@@ -534,9 +538,9 @@ def run_mujoco(cfg, headless=False, video_out="", width=1280, height=720, video_
             action, target_dof_pos = apply_action_postprocess(raw_action, action, target_dof_pos, cfg)
 
         if cam_follow_base:
-            base_x = float(data.qpos[0])
-            base_y = float(data.qpos[1])
-            cam.lookat[:] = np.array([base_x, base_y, float(cam_lookat_z)], dtype=np.float64)
+            cam_base_x += smoothing * (float(data.qpos[0]) - cam_base_x)
+            cam_base_y += smoothing * (float(data.qpos[1]) - cam_base_y)
+            cam.lookat[:] = np.array([cam_base_x, cam_base_y, float(cam_lookat_z)], dtype=np.float64)
             if viewer is not None:
                 viewer.cam.lookat[:] = cam.lookat
 
@@ -585,10 +589,11 @@ def main():
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--cam-follow-base", action="store_true", default=True)
     parser.add_argument("--no-cam-follow-base", action="store_true")
-    parser.add_argument("--cam-distance", type=float, default=2.8)
+    parser.add_argument("--cam-distance", type=float, default=3.5)
     parser.add_argument("--cam-azimuth", type=float, default=135.0)
     parser.add_argument("--cam-elevation", type=float, default=-12.0)
     parser.add_argument("--cam-lookat-z", type=float, default=0.78)
+    parser.add_argument("--cam-smoothing", type=float, default=0.1)
     parser.add_argument("--policy-diff-diagnostics", action="store_true")
     parser.add_argument("--diag-policy-steps", type=int, default=100)
     parser.add_argument("--diag-baseline-policy-path", type=str, default=DEFAULT_BASELINE_POLICY_PATH)
@@ -656,6 +661,7 @@ def main():
         height=args.height,
         video_fps=args.video_fps,
         cam_follow_base=args.cam_follow_base,
+        cam_smoothing=args.cam_smoothing,
         cam_distance=args.cam_distance,
         cam_azimuth=args.cam_azimuth,
         cam_elevation=args.cam_elevation,

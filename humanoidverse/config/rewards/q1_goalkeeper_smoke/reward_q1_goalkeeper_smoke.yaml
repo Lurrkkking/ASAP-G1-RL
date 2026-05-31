@@ -1,0 +1,72 @@
+# @package _global_
+# Q1 Goalkeeper Smoke reward config — simple block-focused rewards
+
+rewards:
+  set_reward: goal_keeper_smoke
+  set_reward_date: 20260529
+  only_positive_rewards: False
+
+  reward_scales:
+    # Core task rewards
+    alive: 0.2
+    ball_contact_bonus: 10.0           # one-time bonus for touching the ball
+    ball_blocked: 8.0                   # ball velocity change away from goal after contact
+    ball_vel_away_from_goal: 3.0        # continuous: ball moving away from goal
+    goal_conceded_penalty: 20.0         # penalty for ball entering goal
+    ball_near_robot: 0.5                # shaping: ball close to robot (pre-contact)
+
+    # Stability penalties (standard)
+    penalty_action_rate: -0.05
+    penalty_torques: -0.00002
+    penalty_dof_vel: -0.0002
+    penalty_orientation: -0.2
+    limits_torque: -0.1
+
+  reward_limit:
+    soft_dof_pos_limit: 0.95
+    soft_dof_vel_limit: 0.95
+    soft_torque_limit: 0.90
+
+    reward_limits_curriculum:
+      soft_dof_pos_curriculum: False
+      soft_dof_pos_initial_limit: 1.15
+      soft_dof_pos_max_limit: 1.15
+      soft_dof_pos_min_limit: 0.95
+      soft_dof_pos_curriculum_degree: 0.00000025
+      soft_dof_pos_curriculum_level_down_threshold: 40
+      soft_dof_pos_curriculum_level_up_threshold: 42
+
+      soft_dof_vel_curriculum: False
+      soft_dof_vel_initial_limit: 1.15
+      soft_dof_vel_max_limit: 1.15
+      soft_dof_vel_min_limit: 0.95
+      soft_dof_vel_curriculum_degree: 0.00000025
+      soft_dof_vel_curriculum_level_down_threshold: 40
+      soft_dof_vel_curriculum_level_up_threshold: 42
+
+      soft_torque_curriculum: False
+      soft_torque_initial_limit: 1.10
+      soft_torque_max_limit: 1.10
+      soft_torque_min_limit: 0.85
+      soft_torque_curriculum_degree: 0.00000025
+      soft_torque_curriculum_level_down_threshold: 40
+      soft_torque_curriculum_level_up_threshold: 42
+
+  reward_penalty_curriculum: False
+  reward_initial_penalty_scale: 1.0
+  reward_min_penalty_scale: 0.0
+  reward_max_penalty_scale: 1.0
+  reward_penalty_level_down_threshold: 100
+  reward_penalty_level_up_threshold: 200
+  reward_penalty_degree: 0.00001
+  num_compute_average_epl: 10000
+
+  reward_penalty_reward_names:
+    [
+      "goal_conceded_penalty",
+      "penalty_action_rate",
+      "penalty_torques",
+      "penalty_dof_vel",
+      "penalty_orientation",
+      "limits_torque",
+    ]

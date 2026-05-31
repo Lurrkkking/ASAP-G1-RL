@@ -1,0 +1,25 @@
+# @package _global_
+# Q1 Goalkeeper Smoke — experiment entry point
+
+defaults:
+  - /algo: ppo
+  - /env: q1_goalkeeper_smoke
+  - /robot: q1/q1_22dof_goalkeeper_soft
+  - /simulator: isaacgym_hitball
+  - /domain_rand: NO_domain_rand
+  - /terrain: terrain_locomotion_plane
+  - /rewards: q1_goalkeeper_smoke/reward_q1_goalkeeper_smoke
+  - /obs: q1_goalkeeper_smoke/q1_goalkeeper_obs
+
+experiment_name: Q1_Goalkeeper_Smoke
+
+# Small PPO smoke test settings
+algo:
+  config:
+    num_steps_per_env: 24
+    num_learning_iterations: 500
+    save_interval: 50
+    init_noise_std: 0.5
+
+# Small-scale training
+num_envs: 64
